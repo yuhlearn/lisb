@@ -1,0 +1,44 @@
+{
+  "module-templates.engine": "handlebars",
+  "module-templates.templates": {
+    "c-module": {
+      "displayName": "C module",
+      "folder": "{{snake name}}",
+      "questions": {
+        "name": "Module name" 
+      },
+      "files": [
+        {
+          "name": "{{snake name}}.h",
+          "content": [
+            "#ifndef _{{constant name}}_H",
+            "#define _{{constant name}}_H",
+            "",
+            "",
+            "#endif"
+          ]
+        },
+        {
+          "name": "{{snake name}}.c",
+          "content": [
+            "#include <{{snake name}}/{{snake name}}.h>",
+            ""
+          ]
+        },
+        {
+          "name": "{{snake name}}.test.h",
+          "content": [
+            "#ifndef _{{constant name}}_TEST_H",
+            "#define _{{constant name}}_TEST_H",
+            "",
+            "#include <module/module.test.h>",
+            "#include <CUnit/Basic.h>",
+            "",
+            "",
+            "#endif"
+          ]
+        }
+      ]
+    }
+  }
+}

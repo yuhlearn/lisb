@@ -1,11 +1,11 @@
 CC := gcc
-CC_FLAGS := -Wall -Wextra 
+std=c99 -pedantic -Wall -Wextra -D_POSIX_C_SOURCE=200112L
 
 SRC := src
 INC := include
 BUILD := build
 BIN := bin
-MAIN_EXECUTABLE := main
+MAIN_EXECUTABLE := lisb
 TEST_EXECUTABLE := test
 
 SRCEXT := c
@@ -15,7 +15,7 @@ MAIN_OBJECTS := $(patsubst $(SRC)/%,$(BUILD)/%,$(MAIN_SOURCES:.$(SRCEXT)=.o))
 TEST_SOURCES := $(patsubst $(SRC)/%main.$(SRCEXT),, $(SOURCES))
 TEST_OBJECTS := $(patsubst $(SRC)/%,$(BUILD)/%,$(TEST_SOURCES:.$(SRCEXT)=.o))
 
-MAIN_LIBRARIES := 
+MAIN_LIBRARIES := -ledit -lncurses
 TEST_LIBRARIES := -lcunit
 INCLUDES := -I $(SRC) -I $(INC)
 
