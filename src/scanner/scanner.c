@@ -138,7 +138,7 @@ static TokenType identifierType()
     switch (scanner.start[0])
     {
 #define LEN(str) (sizeof(str) - 1)
-#define PAR(str1, str2) LEN(str1), LEN(str2), str2
+#define ARGS(str1, str2) LEN(str1), LEN(str2), str2
     case 'a': // append apply
         if (scanner.current - scanner.start > 3 &&
             scanner.start[1] == 'p' &&
@@ -147,13 +147,13 @@ static TokenType identifierType()
             switch (scanner.start[3])
             {
             case 'e': // append
-                return checkKeyword(PAR("appe", "nd"), TOKEN_APPEND);
+                return checkKeyword(ARGS("appe", "nd"), TOKEN_APPEND);
             case 'l': // apply
-                return checkKeyword(PAR("appl", "y"), TOKEN_APPLY);
+                return checkKeyword(ARGS("appl", "y"), TOKEN_APPLY);
             }
         }
     case 'b': // box
-        return checkKeyword(PAR("b", "ox"), TOKEN_BOX);
+        return checkKeyword(ARGS("b", "ox"), TOKEN_BOX);
     case 'c':
         if (scanner.current - scanner.start > 1)
         {
@@ -165,15 +165,15 @@ static TokenType identifierType()
                     switch (scanner.start[2])
                     {
                     case 'l': // call/cc
-                        return checkKeyword(PAR("cal", "l/cc"), TOKEN_CALL_CC);
+                        return checkKeyword(ARGS("cal", "l/cc"), TOKEN_CALL_CC);
                     case 'r': // car
-                        return checkKeyword(PAR("car", ""), TOKEN_CAR);
+                        return checkKeyword(ARGS("car", ""), TOKEN_CAR);
                     }
                 }
             case 'd': // cdr
-                return checkKeyword(PAR("cd", "r"), TOKEN_CDR);
+                return checkKeyword(ARGS("cd", "r"), TOKEN_CDR);
             case 'o': // cons
-                return checkKeyword(PAR("co", "ns"), TOKEN_CONS);
+                return checkKeyword(ARGS("co", "ns"), TOKEN_CONS);
             }
         }
     case 'e':
@@ -182,9 +182,9 @@ static TokenType identifierType()
             switch (scanner.start[1])
             {
             case 'q': // eq?
-                return checkKeyword(PAR("eq", "?"), TOKEN_EQ_Q);
+                return checkKeyword(ARGS("eq", "?"), TOKEN_EQ_Q);
             case 'r': // error
-                return checkKeyword(PAR("er", "ror"), TOKEN_ERROR);
+                return checkKeyword(ARGS("er", "ror"), TOKEN_ERROR);
             }
         }
     case 'i':
@@ -193,9 +193,9 @@ static TokenType identifierType()
             switch (scanner.start[1])
             {
             case 'f': // if
-                return checkKeyword(PAR("if", ""), TOKEN_IF);
+                return checkKeyword(ARGS("if", ""), TOKEN_IF);
             case 'n': // integer?
-                return checkKeyword(PAR("in", "teger?"), TOKEN_INTEGER_Q);
+                return checkKeyword(ARGS("in", "teger?"), TOKEN_INTEGER_Q);
             }
         }
     case 'l':
@@ -204,27 +204,27 @@ static TokenType identifierType()
             switch (scanner.start[1])
             {
             case 'a': // lambda
-                return checkKeyword(PAR("la", "mbda"), TOKEN_LAMBDA);
+                return checkKeyword(ARGS("la", "mbda"), TOKEN_LAMBDA);
             case 'e': // integer?
-                return checkKeyword(PAR("le", "ngth"), TOKEN_LENGTH);
+                return checkKeyword(ARGS("le", "ngth"), TOKEN_LENGTH);
             case 'i':
                 if (scanner.current - scanner.start == LEN("list")) // list
-                    return checkKeyword(PAR("li", "st"), TOKEN_LIST);
+                    return checkKeyword(ARGS("li", "st"), TOKEN_LIST);
                 if (scanner.current - scanner.start == LEN("list?")) // list?
-                    return checkKeyword(PAR("li", "st?"), TOKEN_LIST_Q);
+                    return checkKeyword(ARGS("li", "st?"), TOKEN_LIST_Q);
             }
         }
     case 'm':
         if (scanner.current - scanner.start == LEN("map")) // map
-            return checkKeyword(PAR("m", "ap"), TOKEN_MAP);
+            return checkKeyword(ARGS("m", "ap"), TOKEN_MAP);
         if (scanner.current - scanner.start == LEN("make-vector")) // make-vector
-            return checkKeyword(PAR("m", "ake-vector"), TOKEN_MAKE_VECTOR);
+            return checkKeyword(ARGS("m", "ake-vector"), TOKEN_MAKE_VECTOR);
     case 'n': // null?
-        return checkKeyword(PAR("n", "ull?"), TOKEN_NULL_Q);
+        return checkKeyword(ARGS("n", "ull?"), TOKEN_NULL_Q);
     case 'p': // pair?
-        return checkKeyword(PAR("p", "air?"), TOKEN_PAIR_Q);
+        return checkKeyword(ARGS("p", "air?"), TOKEN_PAIR_Q);
     case 'q': // quote
-        return checkKeyword(PAR("q", "uote"), TOKEN_QUOTE);
+        return checkKeyword(ARGS("q", "uote"), TOKEN_QUOTE);
     case 's':
         if (scanner.current - scanner.start > 1)
         {
@@ -237,42 +237,42 @@ static TokenType identifierType()
                     switch (scanner.start[3])
                     {
                     case '!': // set!
-                        return checkKeyword(PAR("set!", ""), TOKEN_SET);
+                        return checkKeyword(ARGS("set!", ""), TOKEN_SET);
                     case '-':
                         if (scanner.current - scanner.start == LEN("set-xxx!"))
                         {
                             switch (scanner.start[4])
                             {
                             case 'b': // set-box!
-                                return checkKeyword(PAR("set-b", "ox!"), TOKEN_SET_BOX);
+                                return checkKeyword(ARGS("set-b", "ox!"), TOKEN_SET_BOX);
                             case 'c':
                                 switch (scanner.start[5])
                                 {
                                 case 'a': // set-car!
-                                    return checkKeyword(PAR("set-ca", "r!"), TOKEN_SET_CAR);
+                                    return checkKeyword(ARGS("set-ca", "r!"), TOKEN_SET_CAR);
                                 case 'd': // set-cdr!
-                                    return checkKeyword(PAR("set-cd", "r!"), TOKEN_SET_CDR);
+                                    return checkKeyword(ARGS("set-cd", "r!"), TOKEN_SET_CDR);
                                 }
                             }
                         }
                     }
                 }
             case 't': // string?
-                return checkKeyword(PAR("st", "ring?"), TOKEN_STRING_Q);
+                return checkKeyword(ARGS("st", "ring?"), TOKEN_STRING_Q);
             case 'y': // symbol?
-                return checkKeyword(PAR("sy", "mbol?"), TOKEN_SYMBOL_Q);
+                return checkKeyword(ARGS("sy", "mbol?"), TOKEN_SYMBOL_Q);
             }
         }
     case 'u':
-        return checkKeyword(PAR("u", "nbox"), TOKEN_UNBOX);
+        return checkKeyword(ARGS("u", "nbox"), TOKEN_UNBOX);
     case 'v':
         if (scanner.current - scanner.start == LEN("vector-length")) // vector-length
-            return checkKeyword(PAR("v", "ector-length"), TOKEN_VECTOR_LENGTH);
+            return checkKeyword(ARGS("v", "ector-length"), TOKEN_VECTOR_LENGTH);
         if (scanner.current - scanner.start == LEN("vector-ref")) // vector-ref
-            return checkKeyword(PAR("v", "ector-ref"), TOKEN_VECTOR_REF);
+            return checkKeyword(ARGS("v", "ector-ref"), TOKEN_VECTOR_REF);
         if (scanner.current - scanner.start == LEN("vector-set!")) // vector-set!
-            return checkKeyword(PAR("v", "ector-set!"), TOKEN_VECTOR_SET);
-#undef PAR
+            return checkKeyword(ARGS("v", "ector-set!"), TOKEN_VECTOR_SET);
+#undef ARGS
 #undef LEN
     }
 
