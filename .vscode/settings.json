@@ -31,7 +31,7 @@
             "#ifndef _{{constant name}}_TEST_H",
             "#define _{{constant name}}_TEST_H",
             "",
-            "#include <module/module.test.h>",
+            "#include <{{snake name}}/{{snake name}}.h>",
             "#include <CUnit/Basic.h>",
             "",
             "",
