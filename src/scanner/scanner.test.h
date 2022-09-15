@@ -12,7 +12,7 @@ void scannerScanTokenTest()
          apply box call/cc car cdr cons eq? error if integer? \
          lambda length list list? make-vector map null? pair? quote \
          set! set-box! set-car! set-cdr! string? symbol? unbox \
-         vector-length vector-ref vector-set! \0";
+         vector-length vector-ref vector-set! & \1";
 
     initScanner(input);
 
@@ -68,6 +68,10 @@ void scannerScanTokenTest()
     CU_ASSERT_EQUAL(scanToken().type, TOKEN_VECTOR_REF);
     CU_ASSERT_EQUAL(scanToken().type, TOKEN_VECTOR_SET);
 
+    CU_ASSERT_EQUAL(scanToken().type, TOKEN_FAIL);
+
+    CU_ASSERT_EQUAL(scanToken().type, TOKEN_EOF);
+    // check that it's not reading beyond the end of the string
     CU_ASSERT_EQUAL(scanToken().type, TOKEN_EOF);
 }
 
