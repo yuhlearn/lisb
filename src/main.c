@@ -1,18 +1,19 @@
-#include <module/module.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <common/common.h>
+#include <chunk/chunk.h>
+#include <debug/debug.h>
 
 int main(int argc, char **argv)
 {
-	if (argc != 3)
-	{
-		printf("Requires two integer arguments\n");
-		return 0;
-	}
+	Chunk chunk;
+	initChunk(&chunk);
 
-	int a = atoi(argv[1]);
-	int b = atoi(argv[2]);
-	
-	printf("%d + %d = %d\n", a, b, module_add(a ,b));
-    return 0;
+	int constant = addConstant(&chunk, 1.2);
+	writeChunk(&chunk, OP_CONSTANT, 123);
+	writeChunk(&chunk, constant, 123);
+
+	writeChunk(&chunk, OP_RETURN, 123);
+
+	disassembleChunk(&chunk, "test chunk");
+	freeChunk(&chunk);
+	return 0;
 }

@@ -12,7 +12,7 @@ void scannerScanTokenTest()
          apply box call/cc car cdr cons eq? error if integer? \
          lambda length list list? make-vector map null? pair? quote \
          set! set-box! set-car! set-cdr! string? symbol? unbox \
-         vector-length vector-ref vector-set! & \1";
+         vector-length vector-ref vector-set! &";
 
     initScanner(input);
 
