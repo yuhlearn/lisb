@@ -7,6 +7,13 @@
 typedef enum
 {
     OP_CONSTANT,
+    OP_NULL,
+    OP_TRUE,
+    OP_FALSE,
+    OP_ADD,
+    OP_SUBTRACT,
+    OP_MULTIPLY,
+    OP_DIVIDE,
     OP_RETURN,
 } OpCode;
 
@@ -19,9 +26,9 @@ typedef struct
     ValueArray constants;
 } Chunk;
 
-void initChunk(Chunk *chunk);
-void freeChunk(Chunk *chunk);
-void writeChunk(Chunk *chunk, uint8_t byte, int line);
-int addConstant(Chunk *chunk, Value value);
+void chunk_init_chunk(Chunk *chunk);
+void chunk_free_chunk(Chunk *chunk);
+void chunk_write_chunk(Chunk *chunk, uint8_t byte, int line);
+int chunk_add_constant(Chunk *chunk, Value value);
 
 #endif

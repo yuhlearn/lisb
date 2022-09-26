@@ -4,5 +4,17 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"typeinfo": "c",
+			"exception": "c",
+			"type_traits": "c",
+			"limits": "c",
+			"new": "c",
+			"*.tcc": "c",
+			"cmath": "c",
+			"value.h": "c",
+			"common.h": "c"
+		}
+	}
 }

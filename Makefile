@@ -21,6 +21,9 @@ INCLUDES := -I $(SRC) -I $(INC)
 
 all: main
 
+debug: CC_FLAGS += -DDEBUG_TRACE_EXECUTION -DDEBUG_PRINT_CODE -g
+debug: main
+
 main: $(BIN)/$(MAIN_EXECUTABLE)
 
 $(BIN)/$(MAIN_EXECUTABLE): $(MAIN_OBJECTS)
@@ -36,7 +39,7 @@ $(BUILD)/%.o: $(SRC)/%.$(SRCEXT)
 	$(CC) $(CC_FLAGS) $(INCLUDES) -c -o $@ $<
 
 clean:
-	$(RM) -r $(BUILD)
+	$(RM) -r $(BUILD)/*
 	$(RM) -r $(BIN)/*
 
 .PHONY: clean

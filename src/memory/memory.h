@@ -2,16 +2,23 @@
 #define _MEMORY_H
 
 #include <common/common.h>
+#include <object/object.h>
 
-#define GROW_CAPACITY(capacity) \
+#define MEMORY_ALLOCATE(type, count) \
+    (type *)memory_reallocate(NULL, 0, sizeof(type) * (count))
+
+#define MEMORY_FREE(type, pointer) memory_reallocate(pointer, sizeof(type), 0)
+
+#define MEMORY_GROW_CAPACITY(capacity) \
     ((capacity) < 8 ? 8 : (capacity)*2)
 
-#define GROW_ARRAY(type, pointer, oldCount, newCount) \
-    (type *)reallocate(pointer, sizeof(type) * (oldCount), sizeof(type) * (newCount))
+#define MEMORY_GROW_ARRAY(type, pointer, oldCount, newCount) \
+    (type *)memory_reallocate(pointer, sizeof(type) * (oldCount), sizeof(type) * (newCount))
 
-#define FREE_ARRAY(type, pointer, oldCount) \
-    reallocate(pointer, sizeof(type) * (oldCount), 0)
+#define MEMORY_FREE_ARRAY(type, pointer, oldCount) \
+    memory_reallocate(pointer, sizeof(type) * (oldCount), 0)
 
-void *reallocate(void *pointer, size_t oldSize, size_t newSize);
+void *memory_reallocate(void *pointer, size_t oldSize, size_t newSize);
+void memory_free_objects();
 
 #endif

@@ -1,0 +1,619 @@
+#include <parser/parser.h>
+#include <memory/memory.h>
+#include <common/common.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct
+{
+    int capacity;
+    int count;
+    SExpr *sexprs;
+} SexprArray;
+
+typedef struct
+{
+    Token next;
+    Token this;
+    Token error_token;
+    SexprArray sexpr_array;
+} Parser;
+
+Parser parser;
+
+static SExpr *parser_parse_list();
+static SExpr *parser_parse_formals();
+static SExpr *parser_parse_body();
+static SExpr *parser_parse_datum();
+static SExpr *parser_parse_define();
+static SExpr *parser_parse_definition();
+static SExpr *parser_parse_quote();
+static SExpr *parser_parse_lambda();
+static SExpr *parser_parse_if();
+static SExpr *parser_parse_set();
+static SExpr *parser_parse_call_cc();
+static SExpr *parser_parse_application();
+static SExpr *parser_parse_expression();
+static SExpr *parser_parse_form();
+
+/* Error management */
+
+Token parser_get_error_token()
+{
+    return parser.error_token;
+}
+
+static SExpr *parser_failed_at(Token *token, const char *message)
+{
+    fprintf(stderr, "Parser error: ");
+    fprintf(stderr, "[line %d] Failed", token->line);
+
+    parser.error_token = *token;
+
+    if (token->type == TOKEN_EOF)
+    {
+        fprintf(stderr, " at end");
+    }
+    else
+    {
+        fprintf(stderr, " at '%.*s'", token->length, token->start);
+    }
+
+    fprintf(stderr, ": %s\n", message);
+
+    return NULL;
+}
+
+static SExpr *parser_failed(const char *message)
+{
+    return parser_failed_at(&parser.this, message);
+}
+
+static SExpr *parser_failed_at_next(const char *message)
+{
+    return parser_failed_at(&parser.next, message);
+}
+
+/* Parser -- utility functions */
+
+static void parser_advance()
+{
+    parser.this = parser.next;
+    parser.next = scanner_scan_token();
+}
+
+static bool parser_check(TokenType type)
+{
+    return parser.next.type == type;
+}
+
+static bool parser_match(TokenType type)
+{
+    if (!parser_check(type))
+        return false;
+    parser_advance();
+    return true;
+}
+
+static bool parser_is_definition()
+{
+    if (parser.this.type == TOKEN_LEFT_PAREN)
+        switch (parser.next.type)
+        {
+        case TOKEN_DEFINE:
+            return true;
+        }
+
+    return false;
+}
+
+/* Manage the s-expression array */
+
+void parser_init_sexpr_array()
+{
+    parser.sexpr_array.sexprs = NULL;
+    parser.sexpr_array.capacity = 0;
+    parser.sexpr_array.count = 0;
+}
+
+void parser_free_sexpr_array()
+{
+    MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, parser.sexpr_array.capacity);
+    parser_init_sexpr_array();
+}
+
+static SExpr *parser_write_sexpr_array(SExpr value)
+{
+    if (parser.sexpr_array.capacity < parser.sexpr_array.count + 1)
+    {
+        int old_capacity = parser.sexpr_array.capacity;
+        parser.sexpr_array.capacity = MEMORY_GROW_CAPACITY(old_capacity);
+        parser.sexpr_array.sexprs = MEMORY_GROW_ARRAY(SExpr, parser.sexpr_array.sexprs,
+                                                      old_capacity, parser.sexpr_array.capacity);
+    }
+
+    parser.sexpr_array.sexprs[parser.sexpr_array.count] = value;
+    SExpr *sexpr = &(parser.sexpr_array.sexprs[parser.sexpr_array.count]);
+    parser.sexpr_array.count++;
+    return sexpr;
+}
+
+static SExpr *parser_write_atom(Token token)
+{
+    SExpr atom, *sexpr;
+    atom.type = SEXPR_ATOM;
+    atom.value.atom = token;
+    sexpr = parser_write_sexpr_array(atom);
+    parser_advance();
+    return sexpr;
+}
+
+static SExpr *parser_write_null()
+{
+    SExpr null;
+    null.type = SEXPR_NULL;
+    return parser_write_sexpr_array(null);
+}
+
+static SExpr *parser_write_empty()
+{
+    SExpr empty;
+    empty.type = SEXPR_EMPTY;
+    return parser_write_sexpr_array(empty);
+}
+
+static SExpr *parser_write_cons()
+{
+    SExpr cons;
+    cons.type = SEXPR_CONS;
+    PARSER_CAR(&cons) = NULL;
+    PARSER_CDR(&cons) = NULL;
+    return parser_write_sexpr_array(cons);
+}
+
+static SExpr *parser_write_cons_atom(Token atom)
+{
+    SExpr *sexpr = parser_write_cons();
+    PARSER_CAR(sexpr) = parser_write_atom(atom);
+    return sexpr;
+}
+
+static SExpr *parser_write_cons_rule(SExpr *(*rule)())
+{
+    SExpr *sexpr = parser_write_cons();
+    if ((PARSER_CAR(sexpr) = rule()) == NULL)
+        return NULL;
+    return sexpr;
+}
+
+/* Parser -- construct the s-expression(s) */
+
+static SExpr *parser_parse_formals()
+{
+    // Rule: variable / "(" variable * ")"
+    SExpr *sexpr, *previous, *current;
+
+    switch (parser.this.type)
+    {
+    case TOKEN_SYMBOL: // First case: variable
+        sexpr = parser_write_cons_atom(parser.this);
+        PARSER_CDR(sexpr) = parser_write_null();
+        return sexpr;
+
+    case TOKEN_LEFT_PAREN: // Second case: "(" variable * ")"
+        parser_advance();  // skip first parenthesis
+
+        if (parser.this.type == TOKEN_RIGHT_PAREN)
+        {
+            sexpr = parser_write_null();
+            parser_advance();
+            return sexpr;
+        }
+
+        if (parser.this.type != TOKEN_SYMBOL)
+            return parser_failed("Invalid formals syntax. Expected symbol.");
+        sexpr = parser_write_cons_atom(parser.this);
+
+        for (previous = sexpr; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
+        {
+            if (parser.this.type != TOKEN_SYMBOL)
+                return parser_failed("Invalid formals syntax. Expected symbol.");
+            current = parser_write_cons_atom(parser.this);
+            PARSER_CDR(previous) = current;
+        }
+
+        PARSER_CDR(previous) = parser_write_null();
+        parser_advance(); // skip trailing parenthesis
+
+        return sexpr;
+
+    default:
+        return parser_failed("Expected formals.");
+    }
+}
+
+static SExpr *parser_parse_body()
+{
+    // Rule: definition* expression+
+    SExpr *sexpr, *previous, *current;
+    sexpr = NULL;
+
+    // Parse definition*
+    for (previous = sexpr; parser_is_definition(); previous = current)
+    {
+        if ((current = parser_write_cons_rule(parser_parse_definition)) == NULL)
+            return NULL;
+
+        if (sexpr == NULL)
+            sexpr = current;
+        else
+            PARSER_CDR(previous) = current;
+    }
+
+    // Parse expression
+    if ((current = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if (sexpr == NULL)
+        sexpr = current;
+    else
+        PARSER_CDR(previous) = current;
+
+    // Parse expression*
+    for (previous = current; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
+    {
+        if ((current = parser_write_cons_rule(parser_parse_expression)) == NULL)
+            return NULL;
+
+        PARSER_CDR(previous) = current;
+    }
+
+    PARSER_CDR(previous) = parser_write_null();
+    // Don't skip the trailing parenthesis
+
+    return sexpr;
+}
+
+static SExpr *parser_parse_list()
+{
+    // Rule: "(" datum* ")" / "(" datum + "." datum ")" / abbreviation
+    SExpr *list, *previous, *current;
+    list = NULL;
+
+    if (parser.this.type != TOKEN_LEFT_PAREN)
+        return parser_failed("Expected list.");
+    parser_advance(); // Skip the first parenthesis
+
+    // Parse null
+    if (parser.this.type == TOKEN_RIGHT_PAREN)
+    {
+        list = parser_write_null();
+        parser_advance();
+        return list;
+    }
+
+    for (previous = list; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
+    {
+        if ((current = parser_write_cons_rule(parser_parse_datum)) == NULL)
+            return NULL;
+
+        if (list == NULL)
+            list = previous = current;
+        else
+            PARSER_CDR(previous) = current;
+
+        if (parser.this.type == TOKEN_DOT)
+        {
+            parser_advance(); // Skip the dot
+            if ((current = parser_parse_datum()) == NULL)
+                return NULL;
+
+            if (parser.this.type != TOKEN_RIGHT_PAREN)
+                return parser_failed("Invalid list syntax. Expected ')'.");
+
+            parser_advance(); // Skip the trailing parethesis
+            PARSER_CDR(previous) = current;
+            return list;
+        }
+    }
+
+    PARSER_CDR(previous) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return list;
+}
+
+static SExpr *parser_parse_datum()
+{
+    // Rule: constant / variable / list / vector
+    switch (parser.this.type)
+    {
+    case TOKEN_NUMBER:
+    case TOKEN_SYMBOL:
+    case TOKEN_STRING:
+    case TOKEN_TRUE:
+    case TOKEN_FALSE:
+    case TOKEN_DEFINE:
+    case TOKEN_QUOTE:
+    case TOKEN_LAMBDA:
+    case TOKEN_IF:
+    case TOKEN_SET:
+    case TOKEN_CALL_CC:
+        return parser_write_atom(parser.this);
+
+    case TOKEN_LEFT_PAREN:
+        return parser_parse_list();
+    // case TOKEN_VECTOR:
+    default:
+        return parser_failed("Expected datum.");
+    }
+}
+
+static SExpr *parser_parse_define()
+{
+    // Rule: "(" "define" symbol expression ")"
+    SExpr *define, *symbol, *expr;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_DEFINE)
+        return parser_failed("Invalid define syntax. Expected 'define'.");
+    define = parser_write_cons_atom(parser.this);
+
+    if (parser.this.type != TOKEN_SYMBOL)
+        return parser_failed("Invalid define syntax. Expected symbol.");
+    symbol = parser_write_cons_atom(parser.this);
+
+    if ((expr = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid define syntax. Expected ')'.");
+
+    PARSER_CDR(define) = symbol;
+    PARSER_CDR(symbol) = expr;
+    PARSER_CDR(expr) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return define;
+}
+
+static SExpr *parser_parse_definition()
+{
+    TokenType token_type = parser.this.type;
+
+    if (token_type == TOKEN_LEFT_PAREN)
+    {
+        switch (parser.next.type)
+        {
+        case TOKEN_DEFINE:
+            return parser_parse_define();
+        }
+    }
+
+    return parser_failed("Invalid definition syntax.");
+}
+
+static SExpr *parser_parse_quote()
+{
+    // Rule: "(" "quote" datum ")"
+    SExpr *quote, *datum;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_QUOTE)
+        return parser_failed("Invalid expression syntax. Expected 'quote'.");
+    quote = parser_write_cons_atom(parser.this);
+
+    if ((datum = parser_write_cons_rule(parser_parse_datum)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid quote syntax. Expected ')'.");
+
+    PARSER_CDR(quote) = datum;
+    PARSER_CDR(datum) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return quote;
+}
+
+static SExpr *parser_parse_lambda()
+{
+    // Rule: "(" "lambda" formals body ")"
+    SExpr *lambda, *formals, *body;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_LAMBDA)
+        return parser_failed("Invalid expression syntax. Expected 'lambda'.");
+    lambda = parser_write_cons_atom(parser.this);
+
+    if ((formals = parser_write_cons_rule(parser_parse_formals)) == NULL)
+        return NULL;
+
+    if ((body = parser_write_cons_rule(parser_parse_body)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid lambda syntax. Expected ')'.");
+
+    PARSER_CDR(lambda) = formals;
+    PARSER_CDR(formals) = body;
+    PARSER_CDR(body) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return lambda;
+}
+
+static SExpr *parser_parse_if()
+{
+    // Rule: "(" "if" expression expression expression ")"
+    SExpr *iff, *expr1, *expr2, *expr3;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_IF)
+        return parser_failed("Invalid expression syntax. Expected 'if'.");
+    iff = parser_write_cons_atom(parser.this);
+
+    if ((expr1 = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if ((expr2 = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if ((expr3 = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid if syntax. Expected ')'.");
+
+    PARSER_CDR(iff) = expr1;
+    PARSER_CDR(expr1) = expr2;
+    PARSER_CDR(expr2) = expr3;
+    PARSER_CDR(expr3) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return iff;
+}
+
+static SExpr *parser_parse_set()
+{
+    // Rule: (" "set!" variable expression ")"
+    SExpr *set, *symbol, *expr;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_SET)
+        return parser_failed("Expected 'set!'.");
+    set = parser_write_cons_atom(parser.this);
+
+    if (parser.this.type != TOKEN_SYMBOL)
+        return parser_failed("Expected symbol.");
+    symbol = parser_write_cons_atom(parser.this);
+
+    if ((expr = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid set! syntax. Expected ')'.");
+
+    PARSER_CDR(set) = symbol;
+    PARSER_CDR(symbol) = expr;
+    PARSER_CDR(expr) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return set;
+}
+
+static SExpr *parser_parse_call_cc()
+{
+    // Rule: (" "call/cc" expression ")"
+    SExpr *call_cc, *expr;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_CALL_CC)
+        return parser_failed("Expected 'call/cc'.");
+    call_cc = parser_write_cons_atom(parser.this);
+
+    if ((expr = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid call/cc syntax. Expected ')'.");
+
+    PARSER_CDR(call_cc) = expr;
+    PARSER_CDR(expr) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return call_cc;
+}
+
+static SExpr *parser_parse_application()
+{
+    // Rule: "(" expression expression* ")"
+    SExpr *expr, *previous, *current;
+    parser_advance(); // skip first parenthesis
+
+    if ((expr = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    for (previous = expr; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
+    {
+        if ((current = parser_write_cons_rule(parser_parse_expression)) == NULL)
+            return NULL;
+        PARSER_CDR(previous) = current;
+    }
+
+    PARSER_CDR(previous) = parser_write_null();
+    parser_advance(); // skip trailing parenthesis
+
+    return expr;
+}
+
+static SExpr *parser_parse_expression()
+{
+    TokenType token_type = parser.this.type;
+    SExpr *sexpr;
+
+    switch (token_type)
+    {
+    // Applications, definitions and core.
+    case TOKEN_LEFT_PAREN:
+        switch (parser.next.type)
+        {
+        case TOKEN_QUOTE:
+            return parser_parse_quote();
+        case TOKEN_LAMBDA:
+            return parser_parse_lambda();
+        case TOKEN_IF:
+            return parser_parse_if();
+        case TOKEN_SET:
+            return parser_parse_set();
+        case TOKEN_CALL_CC:
+            return parser_parse_call_cc();
+        case TOKEN_SYMBOL:
+            return parser_parse_application();
+        default:
+            return parser_failed_at_next("Expected expression.");
+        }
+
+    // Atoms.
+    case TOKEN_NUMBER:
+        return parser_write_atom(parser.this);
+    case TOKEN_SYMBOL:
+    case TOKEN_STRING:
+    case TOKEN_TRUE:
+    case TOKEN_FALSE:
+        return parser_write_atom(parser.this);
+
+    default:
+        return parser_failed("Expected expression.");
+    }
+}
+
+static SExpr *parser_parse_form()
+{
+    if (parser_is_definition())
+    {
+
+        return parser_parse_definition();
+    }
+    else
+    {
+        return parser_parse_expression();
+    }
+    return parser_failed("Invalid syntax.");
+}
+
+SExpr *parser_parse(const char *source)
+{
+    scanner_init_scanner(source);
+    parser_init_sexpr_array(parser.sexpr_array);
+
+    parser_advance();
+    if (parser.next.type == TOKEN_EOF)
+    {
+        return parser_write_empty();
+    }
+
+    parser_advance();
+    return parser_parse_form();
+}
