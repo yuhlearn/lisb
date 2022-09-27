@@ -14,6 +14,7 @@ typedef struct
 
 typedef struct
 {
+    bool init;
     Token next;
     Token this;
     Token error_token;
@@ -110,27 +111,16 @@ static bool parser_is_definition()
 
 /* Manage the s-expression array */
 
-void parser_init_sexpr_array()
-{
-    parser.sexpr_array.sexprs = NULL;
-    parser.sexpr_array.capacity = 0;
-    parser.sexpr_array.count = 0;
-}
-
-void parser_free_sexpr_array()
-{
-    MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, parser.sexpr_array.capacity);
-    parser_init_sexpr_array();
-}
-
 static SExpr *parser_write_sexpr_array(SExpr value)
 {
     if (parser.sexpr_array.capacity < parser.sexpr_array.count + 1)
     {
         int old_capacity = parser.sexpr_array.capacity;
         parser.sexpr_array.capacity = MEMORY_GROW_CAPACITY(old_capacity);
-        parser.sexpr_array.sexprs = MEMORY_GROW_ARRAY(SExpr, parser.sexpr_array.sexprs,
-                                                      old_capacity, parser.sexpr_array.capacity);
+        parser.sexpr_array.sexprs = MEMORY_GROW_ARRAY(SExpr,
+                                                      parser.sexpr_array.sexprs,
+                                                      old_capacity,
+                                                      parser.sexpr_array.capacity);
     }
 
     parser.sexpr_array.sexprs[parser.sexpr_array.count] = value;
@@ -154,13 +144,6 @@ static SExpr *parser_write_null()
     SExpr null;
     null.type = SEXPR_NULL;
     return parser_write_sexpr_array(null);
-}
-
-static SExpr *parser_write_empty()
-{
-    SExpr empty;
-    empty.type = SEXPR_EMPTY;
-    return parser_write_sexpr_array(empty);
 }
 
 static SExpr *parser_write_cons()
@@ -577,7 +560,6 @@ static SExpr *parser_parse_expression()
 
     // Atoms.
     case TOKEN_NUMBER:
-        return parser_write_atom(parser.this);
     case TOKEN_SYMBOL:
     case TOKEN_STRING:
     case TOKEN_TRUE:
@@ -592,28 +574,52 @@ static SExpr *parser_parse_expression()
 static SExpr *parser_parse_form()
 {
     if (parser_is_definition())
-    {
-
         return parser_parse_definition();
-    }
     else
-    {
         return parser_parse_expression();
-    }
-    return parser_failed("Invalid syntax.");
 }
 
-SExpr *parser_parse(const char *source)
+void parser_reset_parser()
+{
+    Token token = {
+        .type = TOKEN_EOF,
+        .start = NULL,
+        .length = 0,
+        .line = 0,
+    };
+    parser.error_token = token;
+
+    parser.sexpr_array.capacity = 0;
+    parser.sexpr_array.count = 0;
+    parser.sexpr_array.sexprs = NULL;
+}
+
+void parser_init_parser(const char *source)
 {
     scanner_init_scanner(source);
-    parser_init_sexpr_array(parser.sexpr_array);
+    parser_reset_parser();
+    parser.init = true;
+}
 
-    parser_advance();
-    if (parser.next.type == TOKEN_EOF)
+SExpr *parser_parse()
+{
+    parser_reset_parser();
+
+    if (parser.init)
     {
-        return parser_write_empty();
+        parser_advance();
+        parser_advance();
+        parser.init = false;
+    }
+    if (parser.this.type == TOKEN_EOF)
+    {
+        return NULL;
     }
 
-    parser_advance();
     return parser_parse_form();
+}
+
+void *parser_free_sexpr(SExpr *sexpr)
+{
+    return MEMORY_FREE_ARRAY(SExpr, sexpr, 0);
 }

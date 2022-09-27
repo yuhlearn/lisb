@@ -7,36 +7,76 @@
 
 void parser_parse_empty_test()
 {
-    char *input = "";
-    SExpr *sexpr = parser_parse(input);
-    CU_ASSERT_EQUAL(sexpr->type, SEXPR_EMPTY);
+    char *input;
+    SExpr *sexpr;
+
+    input = "";
+    parser_init_parser(input);
+    sexpr = parser_parse();
+    Token error_token = parser_get_error_token();
+
+    CU_ASSERT_TRUE(PARSER_IS_EOF(sexpr, error_token));
+
+    input = "x";
+    parser_init_parser(input);
+    sexpr = parser_parse();
+
+    CU_ASSERT_FALSE(PARSER_IS_EOF(sexpr, error_token));
+
+    sexpr = parser_parse();
+    error_token = parser_get_error_token();
+
+    CU_ASSERT_TRUE(PARSER_IS_EOF(sexpr, error_token));
+
+    input = "1 (define x 1)";
+    parser_init_parser(input);
+    sexpr = parser_parse();
+
+    CU_ASSERT_FALSE(PARSER_IS_EOF(sexpr, error_token));
+
+    sexpr = parser_parse();
+    error_token = parser_get_error_token();
+
+    CU_ASSERT_FALSE(PARSER_IS_EOF(sexpr, error_token));
+
+    sexpr = parser_parse();
+    error_token = parser_get_error_token();
+
+    CU_ASSERT_TRUE(PARSER_IS_EOF(sexpr, error_token));
 }
 
 void parser_parse_constant_test()
 {
-    char *input = "1";
-    SExpr *sexpr = parser_parse(input);
+    char *input;
+    SExpr *sexpr;
+
+    input = "1";
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
     CU_ASSERT_TRUE(PARSER_IS_ATOM(sexpr));
     CU_ASSERT_EQUAL(PARSER_AS_ATOM(sexpr).type, TOKEN_NUMBER);
 
     input = "\"hej hej\"";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
     CU_ASSERT_TRUE(PARSER_IS_ATOM(sexpr));
     CU_ASSERT_EQUAL(PARSER_AS_ATOM(sexpr).type, TOKEN_STRING);
 
     input = "#t";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
     CU_ASSERT_TRUE(PARSER_IS_ATOM(sexpr));
     CU_ASSERT_EQUAL(PARSER_AS_ATOM(sexpr).type, TOKEN_TRUE);
 
     input = "#f";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
     CU_ASSERT_TRUE(PARSER_IS_ATOM(sexpr));
@@ -45,28 +85,38 @@ void parser_parse_constant_test()
 
 void parser_parse_symbol_test()
 {
-    char *input = "-.!$%&*+-./:<=>?@^_~abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    SExpr *sexpr = parser_parse(input);
+    char *input;
+    SExpr *sexpr;
+
+    input = "-.!$%&*+-./:<=>?@^_~abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
     CU_ASSERT_TRUE(PARSER_IS_ATOM(sexpr));
     CU_ASSERT_EQUAL(PARSER_AS_ATOM(sexpr).type, TOKEN_SYMBOL);
 
     input = "lambda";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
 
     input = ".";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
 }
 
 void parser_parse_quote_test()
 {
-    char *input = "(quote 1)";
-    SExpr *sexpr = parser_parse(input);
+    char *input;
+    SExpr *sexpr;
+
+    input = "(quote 1)";
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -84,7 +134,8 @@ void parser_parse_quote_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(quote x)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -97,14 +148,20 @@ void parser_parse_quote_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(quote)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
+
     CU_ASSERT_EQUAL(sexpr, NULL);
 }
 
 void parser_parse_quote_list_test()
 {
-    char *input = "(quote ())";
-    SExpr *sexpr = parser_parse(input);
+    char *input;
+    SExpr *sexpr;
+
+    input = "(quote ())";
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that the second and last element is null
     CU_ASSERT_TRUE(PARSER_IS_CONS(PARSER_CDR(sexpr)));
@@ -112,7 +169,8 @@ void parser_parse_quote_list_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(quote (1))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that the second element is a list
     CU_ASSERT_TRUE(PARSER_IS_CONS(PARSER_CDAR(sexpr)));
@@ -125,7 +183,8 @@ void parser_parse_quote_list_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(quote (1 2))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that the second element is a list
     CU_ASSERT_TRUE(PARSER_IS_CONS(PARSER_CDAR(sexpr)));
@@ -141,7 +200,8 @@ void parser_parse_quote_list_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(quote (1 . 2))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that the second element is a list
     CU_ASSERT_TRUE(PARSER_IS_CONS(PARSER_CDAR(sexpr)));
@@ -156,7 +216,8 @@ void parser_parse_quote_list_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(quote (1 . ()))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that the second element is a list
     CU_ASSERT_TRUE(PARSER_IS_CONS(PARSER_CDAR(sexpr)));
@@ -171,8 +232,12 @@ void parser_parse_quote_list_test()
 
 void parser_parse_lambda_test()
 {
-    char *input = "(lambda () 1)";
-    SExpr *sexpr = parser_parse(input);
+    char *input;
+    SExpr *sexpr;
+
+    input = "(lambda () 1)";
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -198,14 +263,16 @@ void parser_parse_lambda_formals_test()
     char *input;
 
     input = "(lambda () 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     formals = PARSER_CDAR(sexpr);
 
     // Check that the formals element contains null
     CU_ASSERT_TRUE(PARSER_IS_NULL(formals));
 
     input = "(lambda x 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     formals = PARSER_CDAR(sexpr);
 
     // Check that the formals element contains only "x"
@@ -215,7 +282,8 @@ void parser_parse_lambda_formals_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDR(formals)));
 
     input = "(lambda (x) 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     formals = PARSER_CDAR(sexpr);
 
     // Check that the formals element contains only "x"
@@ -225,7 +293,8 @@ void parser_parse_lambda_formals_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDR(formals)));
 
     input = "(lambda (x y) 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     formals = PARSER_CDAR(sexpr);
 
     // Check that the formals element contains only "x" and "y"
@@ -244,7 +313,8 @@ void parser_parse_lambda_body_test()
     char *input;
 
     input = "(lambda () 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     body = PARSER_CDDAR(sexpr);
 
     // Check that the body element contains only "1"
@@ -254,7 +324,8 @@ void parser_parse_lambda_body_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDR(body)));
 
     input = "(lambda () 1 2)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     body = PARSER_CDDAR(sexpr);
 
     // Check that the formals element contains only "1" and "2"
@@ -267,7 +338,8 @@ void parser_parse_lambda_body_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(body)));
 
     input = "(lambda () (define x 1) x)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
     body = PARSER_CDDAR(sexpr);
 
     // Check that the formals element contains only definition and "x"
@@ -287,28 +359,33 @@ void parser_parse_lambda_fail_test()
     char *input;
 
     input = "(lambda () (define x 1))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that it returns NULL, since there are no expressions in body
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_RIGHT_PAREN);
 
     input = "(lambda x)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that it returns NULL, since there are no expressions in body
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_RIGHT_PAREN);
 
     input = "(lambda (1) (define x 1))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     // Check that it returns NULL, the forms are malformed
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_NUMBER);
 
     input = "(lambda (define x 1) x)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
+
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_DEFINE);
 
     // Check that it returns NULL, since there are no formals
@@ -321,7 +398,8 @@ void parser_parse_if_test()
     char *input;
 
     input = "(if #t 1 2)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -350,7 +428,8 @@ void parser_parse_set_test()
     char *input;
 
     input = "(set! x 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -369,13 +448,15 @@ void parser_parse_set_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDDR(sexpr)));
 
     input = "(set! #t 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_TRUE);
 
     input = "(set! x (define y 1))";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_DEFINE);
@@ -387,7 +468,8 @@ void parser_parse_call_cc_test()
     char *input;
 
     input = "(call/cc x)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -402,19 +484,22 @@ void parser_parse_call_cc_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(call/cc x y)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_SYMBOL);
 
     input = "(call/cc set!)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_SET);
 
     input = "(call/cc)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_RIGHT_PAREN);
@@ -426,7 +511,8 @@ void parser_parse_application_test()
     char *input;
 
     input = "(x 1 #f)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -445,7 +531,8 @@ void parser_parse_application_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDDR(sexpr)));
 
     input = "(x 1)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -460,7 +547,8 @@ void parser_parse_application_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDDR(sexpr)));
 
     input = "(x)";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_NOT_EQUAL(sexpr, NULL);
 
@@ -471,7 +559,8 @@ void parser_parse_application_test()
     CU_ASSERT_TRUE(PARSER_IS_NULL(PARSER_CDR(sexpr)));
 
     input = "()";
-    sexpr = parser_parse(input);
+    parser_init_parser(input);
+    sexpr = parser_parse();
 
     CU_ASSERT_EQUAL(sexpr, NULL);
     CU_ASSERT_EQUAL(parser_get_error_token().type, TOKEN_RIGHT_PAREN);

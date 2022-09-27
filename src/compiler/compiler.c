@@ -1,6 +1,6 @@
 #include <compiler/compiler.h>
 #include <common/common.h>
-#include <scanner/scanner.h>
+#include <parser/parser.h>
 #include <object/object.h>
 
 #ifdef DEBUG_PRINT_CODE
@@ -266,9 +266,9 @@ static void compiler_parse_form()
 
 bool compiler_compile(const char *source, Chunk *chunk)
 {
-    scanner_init_scanner(source);
-    compiling_chunk = chunk;
+    SExpr *sexpr = parser_parse(source);
 
+    compiling_chunk = chunk;
     compiler.failed = false;
     compiler.panic_mode = false;
 

@@ -8,7 +8,6 @@ typedef enum
     SEXPR_CONS,
     SEXPR_NULL,
     SEXPR_ATOM,
-    SEXPR_EMPTY
 } SExprType;
 
 typedef struct
@@ -63,12 +62,18 @@ typedef struct SExpr
 #define PARSER_IS_ATOM(sexpr) ((sexpr)->type == SEXPR_ATOM)
 #define PARSER_IS_NULL(sexpr) ((sexpr)->type == SEXPR_NULL)
 #define PARSER_IS_CONS(sexpr) ((sexpr)->type == SEXPR_CONS)
-#define PARSER_IS_EMPTY(sexpr) ((sexpr)->type == SEXPR_EMPTY)
+#define PARSER_IS_EOF(sexpr, token) ((sexpr) == NULL &&           \
+                                     (token).type == TOKEN_EOF && \
+                                     (token).start == NULL &&     \
+                                     (token).length == 0 &&       \
+                                     (token).line == 0)
 
 #define PARSER_AS_ATOM(sexpr) ((sexpr)->value.atom)
 #define PARSER_AS_CONS(sexpr) ((sexpr)->value.cons)
 
 Token parser_get_error_token();
-SExpr *parser_parse(const char *source);
+void parser_init_parser(const char *source);
+SExpr *parser_parse();
+void *parser_free_sexpr(SExpr *sexpr);
 
 #endif
