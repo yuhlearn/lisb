@@ -9,6 +9,7 @@ typedef struct
     const char *start;
     const char *current;
     int line;
+    const char *line_begin;
 } Scanner;
 
 Scanner scanner;
@@ -18,6 +19,7 @@ void scanner_init_scanner(const char *source)
     scanner.start = source;
     scanner.current = source;
     scanner.line = 1;
+    scanner.line_begin = source;
 }
 
 static bool scanner_is_alpha(char c)
@@ -79,6 +81,7 @@ static Token scanner_make_token(TokenType type)
     token.start = scanner.start;
     token.length = (int)(scanner.current - scanner.start);
     token.line = scanner.line;
+    token.row = scanner.current - scanner.line_begin;
     return token;
 }
 
@@ -89,6 +92,7 @@ static Token scanner_error_token(const char *message)
     token.start = message;
     token.length = (int)strlen(message);
     token.line = scanner.line;
+    token.row = scanner.current - scanner.line_begin;
     return token;
 }
 
@@ -106,6 +110,7 @@ static void scanner_skip_whitespace()
             break;
         case '\n':
             scanner.line++;
+            scanner.line_begin = scanner.current;
             scanner_advance();
             break;
         case '/':
@@ -196,7 +201,10 @@ static Token scanner_string()
     while (scanner_peek() != '"' && !scanner_is_at_end())
     {
         if (scanner_peek() == '\n')
+        {
             scanner.line++;
+            scanner.line_begin = scanner.current;
+        }
         scanner_advance();
     }
 
@@ -234,9 +242,10 @@ Token scanner_scan_token()
             return scanner_make_token(TOKEN_TRUE);
         if (scanner_match('f'))
             return scanner_make_token(TOKEN_FALSE);
+        break;
     case '"':
         return scanner_string();
     }
 
-    return scanner_error_token("Unexpected character.");
+    return scanner_error_token("Illegal character.");
 }

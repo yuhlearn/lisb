@@ -2,6 +2,7 @@
 #define _PARSER_H
 
 #include <scanner/scanner.h>
+#include <compiler/compiler.h>
 
 typedef enum
 {
@@ -73,7 +74,7 @@ typedef struct SExpr
 
 Token parser_get_error_token();
 void parser_init_parser(const char *source);
-SExpr *parser_parse();
+CompileResult parser_parse(SExpr **sexpr);
 void *parser_free_sexpr(SExpr *sexpr);
 
 #endif

@@ -264,15 +264,28 @@ static void compiler_parse_form()
     compiler_parse_expression();
 }
 
-bool compiler_compile(const char *source, Chunk *chunk)
+CompileResult compiler_compile(const char *source, Chunk *chunk)
 {
-    SExpr *sexpr = parser_parse(source);
+    SExpr *sexpr;
+    CompileResult result;
 
+    result = parser_parse(&sexpr);
+
+    if (result == COMPILE_OK)
+    {
+        // Compile
+        // result = COMPILE_COMPILE_ERROR iff compilation fails
+
+        parser_free_sexpr(sexpr);
+    }
+
+    return result;
+
+    /*
     compiling_chunk = chunk;
     compiler.failed = false;
     compiler.panic_mode = false;
 
-    compiler_advance();
     while (!compiler_match(TOKEN_EOF))
     {
         compiler_parse_form();
@@ -280,4 +293,5 @@ bool compiler_compile(const char *source, Chunk *chunk)
 
     compiler_end_compiler();
     return !compiler.failed;
+    */
 }

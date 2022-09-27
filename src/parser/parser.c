@@ -15,7 +15,7 @@ typedef struct
 typedef struct
 {
     bool init;
-    Token next;
+    Token lookahead;
     Token this;
     Token error_token;
     SexprArray sexpr_array;
@@ -47,14 +47,19 @@ Token parser_get_error_token()
 
 static SExpr *parser_failed_at(Token *token, const char *message)
 {
-    fprintf(stderr, "Parser error: ");
-    fprintf(stderr, "[line %d] Failed", token->line);
+    // fprintf(stderr, "Parser error: ");
+    fprintf(stderr, "[%d:%d] Parser failed", token->line, token->row);
 
     parser.error_token = *token;
 
     if (token->type == TOKEN_EOF)
     {
         fprintf(stderr, " at end");
+    }
+    else if (token->type == TOKEN_FAIL)
+    {
+        // Nothing
+        fprintf(stderr, " at '%.*s'", token->length, token->start);
     }
     else
     {
@@ -73,20 +78,20 @@ static SExpr *parser_failed(const char *message)
 
 static SExpr *parser_failed_at_next(const char *message)
 {
-    return parser_failed_at(&parser.next, message);
+    return parser_failed_at(&parser.lookahead, message);
 }
 
 /* Parser -- utility functions */
 
 static void parser_advance()
 {
-    parser.this = parser.next;
-    parser.next = scanner_scan_token();
+    parser.this = parser.lookahead;
+    parser.lookahead = scanner_scan_token();
 }
 
 static bool parser_check(TokenType type)
 {
-    return parser.next.type == type;
+    return parser.lookahead.type == type;
 }
 
 static bool parser_match(TokenType type)
@@ -100,7 +105,7 @@ static bool parser_match(TokenType type)
 static bool parser_is_definition()
 {
     if (parser.this.type == TOKEN_LEFT_PAREN)
-        switch (parser.next.type)
+        switch (parser.lookahead.type)
         {
         case TOKEN_DEFINE:
             return true;
@@ -367,7 +372,7 @@ static SExpr *parser_parse_definition()
 
     if (token_type == TOKEN_LEFT_PAREN)
     {
-        switch (parser.next.type)
+        switch (parser.lookahead.type)
         {
         case TOKEN_DEFINE:
             return parser_parse_define();
@@ -538,9 +543,8 @@ static SExpr *parser_parse_expression()
 
     switch (token_type)
     {
-    // Applications, definitions and core.
     case TOKEN_LEFT_PAREN:
-        switch (parser.next.type)
+        switch (parser.lookahead.type)
         {
         case TOKEN_QUOTE:
             return parser_parse_quote();
@@ -553,9 +557,8 @@ static SExpr *parser_parse_expression()
         case TOKEN_CALL_CC:
             return parser_parse_call_cc();
         case TOKEN_SYMBOL:
-            return parser_parse_application();
         default:
-            return parser_failed_at_next("Expected expression.");
+            return parser_parse_application();
         }
 
     // Atoms.
@@ -601,7 +604,7 @@ void parser_init_parser(const char *source)
     parser.init = true;
 }
 
-SExpr *parser_parse()
+CompileResult parser_parse(SExpr **sexpr)
 {
     parser_reset_parser();
 
@@ -613,10 +616,25 @@ SExpr *parser_parse()
     }
     if (parser.this.type == TOKEN_EOF)
     {
-        return NULL;
+        *sexpr = NULL;
+        return COMPILE_EOF;
     }
 
-    return parser_parse_form();
+    *sexpr = parser_parse_form();
+
+    if (*sexpr == NULL)
+    {
+        // Empty string will return NULL too,
+        // but with EOF as error token
+        Token error_token = parser_get_error_token();
+        if (PARSER_IS_EOF(*sexpr, error_token))
+            return COMPILE_EOF;
+
+        // Clean up after the error
+        parser_free_sexpr(parser.sexpr_array.sexprs);
+        return COMPILE_COMPILE_ERROR;
+    }
+    return COMPILE_OK;
 }
 
 void *parser_free_sexpr(SExpr *sexpr)

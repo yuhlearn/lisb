@@ -1,6 +1,7 @@
 #include <vm/vm.h>
 #include <common/common.h>
 #include <debug/debug.h>
+#include <parser/parser.h>
 #include <compiler/compiler.h>
 #include <memory/memory.h>
 
@@ -140,9 +141,39 @@ static InterpretResult vm_run()
 
 InterpretResult vm_interpret(const char *source)
 {
+    CompileResult compile_result;
+    InterpretResult interpret_result;
     Chunk chunk;
-    chunk_init_chunk(&chunk);
 
+    parser_init_parser(source);
+    for (;;)
+    {
+        chunk_init_chunk(&chunk);
+        compile_result = compiler_compile(source, &chunk);
+
+        if (compile_result == COMPILE_COMPILE_ERROR)
+        {
+            chunk_free_chunk(&chunk);
+            return INTERPRET_COMPILE_ERROR;
+        }
+        if (compile_result == COMPILE_EOF)
+        {
+            chunk_free_chunk(&chunk);
+            return INTERPRET_OK;
+        }
+        /*
+        vm.chunk = &chunk;
+        vm.ip = vm.chunk->code;
+        interpret_result = vm_run();
+        chunk_free_chunk(&chunk);
+        */
+        printf("*\n");
+        interpret_result = INTERPRET_OK;
+        if (interpret_result != INTERPRET_OK)
+            return interpret_result;
+    }
+
+    /*
     if (!compiler_compile(source, &chunk))
     {
         chunk_free_chunk(&chunk);
@@ -156,4 +187,5 @@ InterpretResult vm_interpret(const char *source)
 
     chunk_free_chunk(&chunk);
     return result;
+    */
 }

@@ -3,6 +3,13 @@
 
 #include <vm/vm.h>
 
-bool compiler_compile(const char *source, Chunk *chunk);
+typedef enum
+{
+    COMPILE_OK,
+    COMPILE_EOF,
+    COMPILE_COMPILE_ERROR,
+} CompileResult;
+
+CompileResult compiler_compile(const char *source, Chunk *chunk);
 
 #endif

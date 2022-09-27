@@ -7,20 +7,46 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool is_closed(char *str)
+{
+	int depth = 0;
+
+	while (*str)
+	{
+		if (*str == '(')
+			depth++;
+		else if (*str == ')')
+			depth--;
+		str++;
+	}
+
+	return depth <= 0;
+}
+
 static void main_repl()
 {
-	char line[1024];
+	char buffer[1024];
+	size_t start = 0, length = 0;
+	int line;
+
 	for (;;)
 	{
-		printf("> ");
-
-		if (!fgets(line, sizeof(line), stdin))
+		line = 1;
+		do
 		{
-			printf("\n");
-			break;
-		}
+			start += length;
+			printf("%d> ", line);
+			if (!fgets(buffer + start, sizeof(buffer), stdin))
+			{
+				printf("\n");
+				return;
+			}
+			length = strlen(buffer + start);
+			line++;
+		} while (!is_closed(buffer));
 
-		vm_interpret(line);
+		start = length = 0;
+		vm_interpret(buffer);
 	}
 }
 
