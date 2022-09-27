@@ -15,7 +15,7 @@ MAIN_OBJECTS := $(patsubst $(SRC)/%,$(BUILD)/%,$(MAIN_SOURCES:.$(SRCEXT)=.o))
 TEST_SOURCES := $(patsubst $(SRC)/%main.$(SRCEXT),, $(SOURCES))
 TEST_OBJECTS := $(patsubst $(SRC)/%,$(BUILD)/%,$(TEST_SOURCES:.$(SRCEXT)=.o))
 
-MAIN_LIBRARIES := -ledit -lncurses
+MAIN_LIBRARIES := -lreadline -lncurses
 TEST_LIBRARIES := -lcunit
 INCLUDES := -I $(SRC) -I $(INC)
 

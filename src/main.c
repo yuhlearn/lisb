@@ -3,6 +3,8 @@
 #include <debug/debug.h>
 #include <vm/vm.h>
 
+#include <readline/readline.h>
+#include <readline/history.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,26 +25,57 @@ bool is_closed(char *str)
 	return depth <= 0;
 }
 
+int rlgets(char *buffer, const int n, const int line_count)
+{
+	char prompt[256];
+	char *line = NULL;
+	int length = 0;
+
+	sprintf(prompt, "%d> ", line_count);
+	line = readline(prompt);
+
+	if (line && *line)
+		add_history(line);
+
+	if (line)
+	{
+		length = strlen(line);
+
+		if (length >= n)
+		{
+			free(line);
+			return 0;
+		}
+
+		strncpy(buffer, line, length);
+		buffer[length++] = '\n';
+		free(line);
+	}
+
+	return length;
+}
+
 static void main_repl()
 {
-	char buffer[1024];
+	char buffer[2048];
 	size_t start = 0, length = 0;
-	int line;
+	int line_count;
 
 	for (;;)
 	{
-		line = 1;
+		memset(buffer, '\0', sizeof(buffer));
+		line_count = 1;
 		do
 		{
 			start += length;
-			printf("%d> ", line);
-			if (!fgets(buffer + start, sizeof(buffer), stdin))
+			if (!(length = rlgets(buffer + start,
+								  sizeof(buffer) - start - 1,
+								  line_count)))
 			{
-				printf("\n");
+				printf("Input buffer overflow. Terminating.\n");
 				return;
 			}
-			length = strlen(buffer + start);
-			line++;
+			line_count++;
 		} while (!is_closed(buffer));
 
 		start = length = 0;
