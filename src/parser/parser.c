@@ -76,11 +76,6 @@ static SExpr *parser_failed(const char *message)
     return parser_failed_at(&parser.this, message);
 }
 
-static SExpr *parser_failed_at_next(const char *message)
-{
-    return parser_failed_at(&parser.lookahead, message);
-}
-
 /* Parser -- utility functions */
 
 static void parser_advance()
