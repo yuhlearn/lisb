@@ -14,7 +14,6 @@ typedef struct
 
 typedef struct
 {
-    bool init;
     Token lookahead;
     Token this;
     Token error_token;
@@ -124,7 +123,7 @@ static SExpr *parser_write_sexpr_array(SExpr value)
     }
 
     parser.sexpr_array.sexprs[parser.sexpr_array.count] = value;
-    SExpr *sexpr = &(parser.sexpr_array.sexprs[parser.sexpr_array.count]);
+    SExpr *sexpr = parser.sexpr_array.sexprs + parser.sexpr_array.count;
     parser.sexpr_array.count++;
     return sexpr;
 }
@@ -596,19 +595,19 @@ void parser_init_parser(const char *source)
 {
     scanner_init_scanner(source);
     parser_reset_parser();
-    parser.init = true;
+
+    parser.this = parser.error_token;
+    parser.lookahead = parser.error_token;
+
+    // Load the "this" and "lookahead" tokens
+    parser_advance();
+    parser_advance();
 }
 
 CompileResult parser_parse(SExpr **sexpr)
 {
     parser_reset_parser();
 
-    if (parser.init)
-    {
-        parser_advance();
-        parser_advance();
-        parser.init = false;
-    }
     if (parser.this.type == TOKEN_EOF)
     {
         *sexpr = NULL;
@@ -619,22 +618,18 @@ CompileResult parser_parse(SExpr **sexpr)
 
     if (*sexpr == NULL)
     {
-        // Empty string will return NULL too,
-        // but with EOF as error token
-        Token error_token = parser_get_error_token();
-        if (PARSER_IS_EOF(*sexpr, error_token))
+        if (PARSER_IS_EOF(*sexpr, parser_get_error_token()))
+        {
+            printf("here\n");
             return COMPILE_EOF;
-
-        // Clean up after the error
-        parser.sexpr_array.sexprs =
-            parser_free_sexpr(parser.sexpr_array.sexprs);
+        }
 
         return COMPILE_COMPILE_ERROR;
     }
     return COMPILE_OK;
 }
 
-void *parser_free_sexpr(SExpr *sexpr)
+void parser_free_sexpr()
 {
-    return MEMORY_FREE_ARRAY(SExpr, sexpr, 0);
+    return MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, 0);
 }

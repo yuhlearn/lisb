@@ -1,5 +1,6 @@
 #include <debug/debug.h>
 #include <value/value.h>
+#include <scanner/scanner.h>
 
 #include <stdio.h>
 
@@ -68,4 +69,45 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
         printf("Unknown opcode %d\n", instruction);
         return offset + 1;
     }
+}
+
+void debug_print_sexpression(SExpr *sexpr)
+{
+    if (sexpr == NULL)
+    {
+        printf("NULL ");
+        return;
+    }
+
+    SExprType type = sexpr->type;
+
+    switch (type)
+    {
+    case SEXPR_ATOM:
+        printf("%.*s ", sexpr->value.atom.length, sexpr->value.atom.start);
+        break;
+    case SEXPR_CONS:
+        debug_disassemble_sexpression(PARSER_CAR(sexpr));
+        debug_print_sexpression(PARSER_CDR(sexpr));
+        break;
+    case SEXPR_NULL:
+        printf(") ");
+        break;
+    }
+    return;
+}
+
+void debug_disassemble_sexpression(SExpr *sexpr)
+{
+    if (sexpr == NULL)
+    {
+        printf("NULL ");
+        return;
+    }
+    else if (sexpr->type == SEXPR_CONS)
+        printf("( ");
+    else if (sexpr->type == SEXPR_NULL)
+        printf("( )");
+
+    debug_print_sexpression(sexpr);
 }

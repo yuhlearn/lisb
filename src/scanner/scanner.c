@@ -246,6 +246,5 @@ Token scanner_scan_token()
     case '"':
         return scanner_string();
     }
-
     return scanner_error_token("Illegal character.");
 }

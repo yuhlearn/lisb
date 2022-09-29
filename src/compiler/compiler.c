@@ -120,13 +120,17 @@ CompileResult compiler_compile(const char *source, Chunk *chunk)
 
     result = parser_parse(&sexpr);
 
+#ifdef DEBUG_PRINT_CODE
     if (result == COMPILE_OK)
     {
-        // Compile
-        // result = COMPILE_COMPILE_ERROR iff compilation fails
-
-        parser_free_sexpr(sexpr);
+        printf("s-expr: ", source);
+        debug_disassemble_sexpression(sexpr);
+        printf("\n");
     }
+#endif
+
+    // Compile
+    // result = COMPILE_COMPILE_ERROR iff compilation fails
 
     return result;
 }

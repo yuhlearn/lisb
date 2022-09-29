@@ -167,12 +167,11 @@ InterpretResult vm_interpret(const char *source)
         interpret_result = vm_run();
         chunk_free_chunk(&chunk);
         */
-        printf("*\n");
         interpret_result = INTERPRET_OK;
         if (interpret_result != INTERPRET_OK)
             return interpret_result;
     }
-
+    parser_free_sexpr();
     /*
     if (!compiler_compile(source, &chunk))
     {

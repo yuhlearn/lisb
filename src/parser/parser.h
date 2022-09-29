@@ -75,6 +75,6 @@ typedef struct SExpr
 Token parser_get_error_token();
 void parser_init_parser(const char *source);
 CompileResult parser_parse(SExpr **sexpr);
-void *parser_free_sexpr(SExpr *sexpr);
+void parser_free_sexpr();
 
 #endif
