@@ -57,7 +57,7 @@ int rlgets(char *buffer, const int n, const int line_count)
 
 static void main_repl()
 {
-	char buffer[2048];
+	char buffer[1024];
 	size_t start = 0, length = 0;
 	int line_count;
 

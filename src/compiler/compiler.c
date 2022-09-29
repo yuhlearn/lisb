@@ -151,7 +151,7 @@ static void compiler_end_compiler()
 #endif
 }
 
-/* Parsing */
+/* Compilation */
 
 static void compiler_parse_number()
 {
@@ -280,18 +280,4 @@ CompileResult compiler_compile(const char *source, Chunk *chunk)
     }
 
     return result;
-
-    /*
-    compiling_chunk = chunk;
-    compiler.failed = false;
-    compiler.panic_mode = false;
-
-    while (!compiler_match(TOKEN_EOF))
-    {
-        compiler_parse_form();
-    }
-
-    compiler_end_compiler();
-    return !compiler.failed;
-    */
 }

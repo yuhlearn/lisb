@@ -626,7 +626,9 @@ CompileResult parser_parse(SExpr **sexpr)
             return COMPILE_EOF;
 
         // Clean up after the error
-        parser_free_sexpr(parser.sexpr_array.sexprs);
+        parser.sexpr_array.sexprs =
+            parser_free_sexpr(parser.sexpr_array.sexprs);
+
         return COMPILE_COMPILE_ERROR;
     }
     return COMPILE_OK;
