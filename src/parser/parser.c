@@ -611,7 +611,7 @@ CompileResult parser_parse(SExpr **sexpr)
     if (parser.this.type == TOKEN_EOF)
     {
         *sexpr = NULL;
-        return COMPILE_EOF;
+        return COMPILER_EOF;
     }
 
     *sexpr = parser_parse_form();
@@ -621,12 +621,12 @@ CompileResult parser_parse(SExpr **sexpr)
         if (PARSER_IS_EOF(*sexpr, parser_get_error_token()))
         {
             printf("here\n");
-            return COMPILE_EOF;
+            return COMPILER_EOF;
         }
 
-        return COMPILE_COMPILE_ERROR;
+        return COMPILER_COMPILE_ERROR;
     }
-    return COMPILE_OK;
+    return COMPILER_OK;
 }
 
 void parser_free_sexpr()

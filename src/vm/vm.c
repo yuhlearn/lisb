@@ -74,7 +74,7 @@ static InterpretResult vm_run()
         if (!VALUE_IS_NUMBER(vm_peek(0)) || !VALUE_IS_NUMBER(vm_peek(1))) \
         {                                                                 \
             vm_runtime_error("Operands must be numbers.");                \
-            return INTERPRET_RUNTIME_ERROR;                               \
+            return VM_RUNTIME_ERROR;                                      \
         }                                                                 \
         double b = VALUE_AS_NUMBER(vm_pop());                             \
         double a = VALUE_AS_NUMBER(vm_pop());                             \
@@ -129,7 +129,7 @@ static InterpretResult vm_run()
         {
             value_print_value(vm_pop());
             printf("\n");
-            return INTERPRET_OK;
+            return VM_OK;
         }
         }
     }
@@ -151,24 +151,24 @@ InterpretResult vm_interpret(const char *source)
         chunk_init_chunk(&chunk);
         compile_result = compiler_compile(source, &chunk);
 
-        if (compile_result == COMPILE_COMPILE_ERROR)
+        if (compile_result != COMPILER_OK)
         {
+            parser_free_sexpr();
             chunk_free_chunk(&chunk);
-            return INTERPRET_COMPILE_ERROR;
+
+            if (compile_result == COMPILER_COMPILE_ERROR)
+                return VM_COMPILE_ERROR;
+
+            // EOF - exit compiler successfully
+            return VM_OK;
         }
-        if (compile_result == COMPILE_EOF)
-        {
-            chunk_free_chunk(&chunk);
-            return INTERPRET_OK;
-        }
-        /*
+
         vm.chunk = &chunk;
         vm.ip = vm.chunk->code;
         interpret_result = vm_run();
         chunk_free_chunk(&chunk);
-        */
-        interpret_result = INTERPRET_OK;
-        if (interpret_result != INTERPRET_OK)
+
+        if (interpret_result == VM_RUNTIME_ERROR)
             return interpret_result;
     }
     parser_free_sexpr();

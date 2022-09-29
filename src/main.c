@@ -125,9 +125,9 @@ static void main_run_file(const char *path)
 	InterpretResult result = vm_interpret(source);
 	free(source);
 
-	if (result == INTERPRET_COMPILE_ERROR)
+	if (result == VM_COMPILE_ERROR)
 		exit(65);
-	if (result == INTERPRET_RUNTIME_ERROR)
+	if (result == VM_RUNTIME_ERROR)
 		exit(70);
 }
 

@@ -60,6 +60,7 @@ typedef struct SExpr
 #define PARSER_CDDDAR(sexpr) (PARSER_CDAR(PARSER_CDDR(sexpr)))
 #define PARSER_CDDDDR(sexpr) (PARSER_CDDR(PARSER_CDDR(sexpr)))
 
+#define PARSER_TYPE(sexpr) ((sexpr)->type)
 #define PARSER_IS_ATOM(sexpr) ((sexpr)->type == SEXPR_ATOM)
 #define PARSER_IS_NULL(sexpr) ((sexpr)->type == SEXPR_NULL)
 #define PARSER_IS_CONS(sexpr) ((sexpr)->type == SEXPR_CONS)

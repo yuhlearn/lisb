@@ -5,9 +5,9 @@
 
 typedef enum
 {
-    COMPILE_OK,
-    COMPILE_EOF,
-    COMPILE_COMPILE_ERROR,
+    COMPILER_OK,
+    COMPILER_EOF,
+    COMPILER_COMPILE_ERROR,
 } CompileResult;
 
 CompileResult compiler_compile(const char *source, Chunk *chunk);

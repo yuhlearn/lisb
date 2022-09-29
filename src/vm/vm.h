@@ -19,9 +19,9 @@ typedef struct
 
 typedef enum
 {
-    INTERPRET_OK,
-    INTERPRET_COMPILE_ERROR,
-    INTERPRET_RUNTIME_ERROR,
+    VM_OK,
+    VM_COMPILE_ERROR,
+    VM_RUNTIME_ERROR,
 } InterpretResult;
 
 extern VM vm;
