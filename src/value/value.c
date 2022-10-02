@@ -34,17 +34,39 @@ void value_print_value(Value value)
 {
     switch (value.type)
     {
-    case VAL_BOOL:
+    case VALUE_BOOL:
         printf(VALUE_AS_BOOL(value) ? "#t" : "#f");
         break;
-    case VAL_NULL:
+    case VALUE_NULL:
         printf("()");
         break;
-    case VAL_NUMBER:
+    case VALUE_VOID:
+        printf("#<void>");
+        break;
+    case VALUE_NUMBER:
         printf("%g", VALUE_AS_NUMBER(value));
         break;
-    case VAL_OBJ:
+    case VALUE_OBJ:
         object_print_object(value);
         break;
+    }
+}
+
+bool value_values_equal(Value a, Value b)
+{
+    if (a.type != b.type)
+        return false;
+    switch (a.type)
+    {
+    case VALUE_BOOL:
+        return VALUE_AS_BOOL(a) == VALUE_AS_BOOL(b);
+    case VALUE_NULL:
+        return true;
+    case VALUE_VOID:
+        return true;
+    case VALUE_NUMBER:
+        return VALUE_AS_NUMBER(a) == VALUE_AS_NUMBER(b);
+    default:
+        return false; // Unreachable.
     }
 }

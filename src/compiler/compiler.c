@@ -19,6 +19,8 @@ typedef struct
 Compiler compiler;
 Chunk *compiling_chunk;
 
+static void compiler_compile_expression(const SExpr *sexpr);
+
 static Chunk *compiler_current_chunk()
 {
     return compiling_chunk;
@@ -99,9 +101,16 @@ static void compiler_end_compiler()
 #endif
 }
 
+static uint8_t compiler_identifier_constant(Token *name)
+{
+    return compiler_make_constant(VALUE_OBJ_VAL(object_copy_string(name->start,
+                                                                   name->length)));
+}
+
 /* Compilation */
 
-static bool compiler_is_definition(const SExpr *sexpr)
+static bool
+compiler_is_definition(const SExpr *sexpr)
 {
     if (PARSER_TYPE(sexpr) == SEXPR_CONS &&
         PARSER_CAR(sexpr)->type == SEXPR_ATOM)
@@ -123,11 +132,21 @@ static void compiler_compile_number(const SExpr *sexpr)
     compiler_emit_constant(VALUE_NUMBER_VAL(value));
 }
 
-static void compiler_compile_symbol(bool can_assign, Token token)
+static void compiler_compile_variable(bool set, Token name)
 {
-    compiler_emit_constant(VALUE_OBJ_VAL(object_copy_string(token.start + 1,
-                                                            token.length - 2)));
+    uint8_t arg = compiler_identifier_constant(&name);
+    if (set)
+        compiler_emit_bytes(OP_SET_GLOBAL, arg);
+    else
+        compiler_emit_bytes(OP_GET_GLOBAL, arg);
 }
+
+// Why is this here?
+// static void compiler_compile_symbol(bool can_assign, Token token)
+// {
+//     compiler_emit_constant(VALUE_OBJ_VAL(object_copy_string(token.start + 1,
+//                                                             token.length - 2)));
+// }
 
 static void compiler_compile_string(bool can_assign, Token token)
 {
@@ -146,30 +165,73 @@ static void compiler_compile_atomic_expression(const SExpr *sexpr)
     {
     case TOKEN_NUMBER:
         compiler_compile_number(sexpr);
-        return;
+        break;
     case TOKEN_SYMBOL:
+        compiler_compile_variable(false, PARSER_AS_ATOM(sexpr));
+        break;
     case TOKEN_STRING:
-        compiler_compile_string(sexpr, PARSER_AS_ATOM(sexpr));
-        return;
+        compiler_compile_string(true, PARSER_AS_ATOM(sexpr));
+        break;
     case TOKEN_TRUE:
         compiler_compile_boolean(sexpr, true);
-        return;
+        break;
     case TOKEN_FALSE:
         compiler_compile_boolean(sexpr, false);
-        return;
+        break;
+    }
+}
+
+static void compiler_compile_set_expression(const SExpr *sexpr)
+{
+    compiler_compile_expression(PARSER_CDDAR(sexpr));
+    compiler_compile_variable(true, PARSER_AS_ATOM(PARSER_CDAR(sexpr)));
+}
+
+static void compiler_compile_parameter_expression(const SExpr *sexpr)
+{
+    switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
+    {
+    case TOKEN_SET:
+        printf("here\n");
+        compiler_compile_set_expression(sexpr);
+        break;
+
+    default:
+        break;
     }
 }
 
 static void compiler_compile_expression(const SExpr *sexpr)
 {
-    if (PARSER_IS_CONS(sexpr) == SEXPR_ATOM)
+    if (PARSER_IS_CONS(sexpr))
     {
-        // compile parameterized expression
+        compiler_compile_parameter_expression(sexpr);
     }
     else
     {
-        // compile atomic expression
         compiler_compile_atomic_expression(sexpr);
+    }
+}
+
+static void compiler_define_variable(uint8_t global)
+{
+    compiler_emit_bytes(OP_DEFINE_GLOBAL, global);
+}
+
+static void compiler_compile_define(const SExpr *sexpr)
+{
+    uint8_t global = compiler_identifier_constant(&PARSER_AS_ATOM(PARSER_CDAR(sexpr)));
+    compiler_compile_expression(PARSER_CDDAR(sexpr));
+    compiler_define_variable(global);
+}
+
+static void compiler_compile_definition(const SExpr *sexpr)
+{
+    switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
+    {
+    case TOKEN_DEFINE:
+        compiler_compile_define(sexpr);
+        break;
     }
 }
 
@@ -179,11 +241,12 @@ static void compiler_compile_form(const SExpr *sexpr)
 
     if (compiler_is_definition(sexpr))
     {
-        // compile definition
+        compiler_compile_definition(sexpr);
     }
     else
     {
         compiler_compile_expression(sexpr);
+        compiler_emit_byte(OP_POP);
     }
 }
 

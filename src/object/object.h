@@ -30,6 +30,7 @@ struct ObjString
     uint32_t hash;
 };
 
+ObjString *object_take_string(char *chars, int length);
 ObjString *object_copy_string(const char *chars, int length);
 void object_print_object(Value value);
 

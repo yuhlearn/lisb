@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 VM vm;
 
@@ -33,6 +34,7 @@ void vm_init_vm()
 {
     vm_reset_stack();
     vm.objects = NULL;
+    table_init_table(&vm.globals);
     table_init_table(&vm.strings);
 }
 
@@ -64,10 +66,26 @@ static bool vm_is_falsey(Value value)
     return VALUE_IS_BOOL(value) && !VALUE_AS_BOOL(value);
 }
 
+static void concatenate()
+{
+    ObjString *b = OBJECT_AS_STRING(vm_pop());
+    ObjString *a = OBJECT_AS_STRING(vm_pop());
+
+    int length = a->length + b->length;
+    char *chars = MEMORY_ALLOCATE(char, length + 1);
+    memcpy(chars, a->chars, a->length);
+    memcpy(chars + a->length, b->chars, b->length);
+    chars[length] = '\0';
+
+    ObjString *result = object_take_string(chars, length);
+    vm_push(VALUE_OBJ_VAL(result));
+}
+
 static InterpretResult vm_run()
 {
 #define VM_READ_BYTE() (*vm.ip++)
 #define VM_READ_CONSTANT() (vm.chunk->constants.values[VM_READ_BYTE()])
+#define VM_READ_STRING() OBJECT_AS_STRING(VM_READ_CONSTANT())
 #define VM_BINARY_OP(value_type, op)                                      \
     do                                                                    \
     {                                                                     \
@@ -113,6 +131,40 @@ static InterpretResult vm_run()
         case OP_FALSE:
             vm_push(VALUE_BOOL_VAL(false));
             break;
+        case OP_POP:
+            vm_pop();
+            break;
+        case OP_GET_GLOBAL:
+        {
+            ObjString *name = VM_READ_STRING();
+            Value value;
+            if (!table_get(&vm.globals, name, &value))
+            {
+                vm_runtime_error("Undefined variable '%s'.", name->chars);
+                return VM_RUNTIME_ERROR;
+            }
+            vm_push(value);
+            break;
+        }
+        case OP_DEFINE_GLOBAL:
+        {
+            ObjString *name = VM_READ_STRING();
+            table_set(&vm.globals, name, vm_peek(0));
+            vm_pop();
+            break;
+        }
+        case OP_SET_GLOBAL:
+        {
+            ObjString *name = VM_READ_STRING();
+            if (table_set(&vm.globals, name, vm_pop()))
+            {
+                table_delete(&vm.globals, name);
+                vm_runtime_error("Undefined variable '%s'.", name->chars);
+                return VM_RUNTIME_ERROR;
+            }
+            vm_push(VALUE_VOID_VAL);
+            break;
+        }
         case OP_ADD:
             VM_BINARY_OP(VALUE_NUMBER_VAL, +);
             break;
@@ -127,7 +179,7 @@ static InterpretResult vm_run()
             break;
         case OP_RETURN:
         {
-            value_print_value(vm_pop());
+            // value_print_value(vm_pop());
             printf("\n");
             return VM_OK;
         }
@@ -136,6 +188,7 @@ static InterpretResult vm_run()
 
 #undef VM_READ_BYTE
 #undef VM_READ_CONSTANT
+#undef VM_READ_STRING
 #undef VM_BINARY_OP
 }
 

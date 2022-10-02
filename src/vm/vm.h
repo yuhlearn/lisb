@@ -13,6 +13,7 @@ typedef struct
     uint8_t *ip;
     Value stack[VM_STACK_MAX];
     Value *stack_top;
+    Table globals;
     Table strings;
     Obj *objects;
 } VM;
@@ -29,7 +30,5 @@ extern VM vm;
 void vm_init_vm();
 void vm_free_vm();
 InterpretResult vm_interpret(const char *source);
-void vm_push(Value value);
-Value vm_pop();
 
 #endif

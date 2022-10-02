@@ -631,5 +631,5 @@ CompileResult parser_parse(SExpr **sexpr)
 
 void parser_free_sexpr()
 {
-    return MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, 0);
+    MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, 0);
 }

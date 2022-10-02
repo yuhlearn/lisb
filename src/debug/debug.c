@@ -55,6 +55,14 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
         return debug_simple_instruction("OP_TRUE", offset);
     case OP_FALSE:
         return debug_simple_instruction("OP_FALSE", offset);
+    case OP_POP:
+        return debug_simple_instruction("OP_POP", offset);
+    case OP_GET_GLOBAL:
+        return debug_constant_instruction("OP_GET_GLOBAL", chunk, offset);
+    case OP_DEFINE_GLOBAL:
+        return debug_constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+    case OP_SET_GLOBAL:
+        return debug_constant_instruction("OP_SET_GLOBAL", chunk, offset);
     case OP_ADD:
         return debug_simple_instruction("OP_ADD", offset);
     case OP_SUBTRACT:

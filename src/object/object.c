@@ -42,7 +42,6 @@ static uint32_t object_hash_string(const char *key, int length)
 
 ObjString *object_take_string(char *chars, int length)
 {
-
     uint32_t hash = object_hash_string(chars, length);
     ObjString *interned = table_find_string(&vm.strings, chars, length, hash);
     if (interned != NULL)
