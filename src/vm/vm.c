@@ -85,6 +85,7 @@ static InterpretResult vm_run()
 {
 #define VM_READ_BYTE() (*vm.ip++)
 #define VM_READ_CONSTANT() (vm.chunk->constants.values[VM_READ_BYTE()])
+#define VM_READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
 #define VM_READ_STRING() OBJECT_AS_STRING(VM_READ_CONSTANT())
 #define VM_BINARY_OP(value_type, op)                                      \
     do                                                                    \
@@ -191,6 +192,19 @@ static InterpretResult vm_run()
         case OP_DIVIDE:
             VM_BINARY_OP(VALUE_NUMBER_VAL, /);
             break;
+        case OP_JUMP:
+        {
+            uint16_t offset = VM_READ_SHORT();
+            vm.ip += offset;
+            break;
+        }
+        case OP_JUMP_IF_FALSE:
+        {
+            uint16_t offset = VM_READ_SHORT();
+            if (vm_is_falsey(vm_peek(0)))
+                vm.ip += offset;
+            break;
+        }
         case OP_RETURN:
         {
             value_print_value(vm_pop());
@@ -202,6 +216,7 @@ static InterpretResult vm_run()
 
 #undef VM_READ_BYTE
 #undef VM_READ_CONSTANT
+#undef VM_READ_SHORT
 #undef VM_READ_STRING
 #undef VM_BINARY_OP
 }

@@ -20,6 +20,8 @@ typedef enum
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
+    OP_JUMP,
+    OP_JUMP_IF_FALSE,
     OP_RETURN,
 } OpCode;
 

@@ -80,6 +80,14 @@ static void compiler_emit_bytes(uint8_t byte1, uint8_t byte2)
     compiler_emit_byte(byte2);
 }
 
+static int compiler_emit_jump(uint8_t instruction)
+{
+    compiler_emit_byte(instruction);
+    compiler_emit_byte(0xff);
+    compiler_emit_byte(0xff);
+    return compiler_current_chunk()->count - 2;
+}
+
 static void compiler_emit_return()
 {
     compiler_emit_byte(OP_RETURN);
@@ -111,6 +119,22 @@ static void compiler_end_compiler()
         debug_disassemble_chunk(compiler_current_chunk(), "code");
     }
 #endif
+}
+
+static void compiler_patch_jump(int offset)
+{
+    // -2 to adjust for the bytecode for the jump offset itself.
+    int jump = compiler_current_chunk()->count - offset - 2;
+
+    if (jump > UINT16_MAX)
+    {
+        fprintf(stderr, "Too much code to jump over.");
+        exit(1);
+    }
+
+    // write the jump offset to code using some bit manipulation
+    compiler_current_chunk()->code[offset] = (jump >> 8) & 0xff;
+    compiler_current_chunk()->code[offset + 1] = jump & 0xff;
 }
 
 static uint8_t compiler_identifier_constant(Token *name)
@@ -344,6 +368,30 @@ static void compiler_compile_begin_expression(const SExpr *sexpr)
     }
 }
 
+static void compiler_compile_if_expression(const SExpr *sexpr)
+{
+    SExpr *cond_expr, *then_expr, *else_expr;
+
+    cond_expr = PARSER_CDAR(sexpr);
+    then_expr = PARSER_CDDAR(sexpr);
+    else_expr = PARSER_CDDDAR(sexpr);
+
+    compiler_compile_expression(cond_expr);
+
+    int then_jump = compiler_emit_jump(OP_JUMP_IF_FALSE);
+    compiler_emit_byte(OP_POP);
+
+    compiler_compile_expression(then_expr);
+
+    int else_jump = compiler_emit_jump(OP_JUMP);
+    compiler_patch_jump(then_jump);
+    compiler_emit_byte(OP_POP);
+
+    compiler_compile_expression(else_expr);
+
+    compiler_patch_jump(else_jump);
+}
+
 static void compiler_compile_compound_expression(const SExpr *sexpr)
 {
     switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
@@ -356,6 +404,9 @@ static void compiler_compile_compound_expression(const SExpr *sexpr)
         break;
     case TOKEN_BEGIN:
         compiler_compile_begin_expression(sexpr);
+        break;
+    case TOKEN_IF:
+        compiler_compile_if_expression(sexpr);
         break;
     default:
         compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(sexpr)),
