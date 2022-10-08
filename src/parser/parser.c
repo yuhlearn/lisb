@@ -227,20 +227,16 @@ static SExpr *parser_parse_body()
         if ((current = parser_write_cons_rule(parser_parse_definition)) == NULL)
             return NULL;
 
-        if (sexpr == NULL)
-            sexpr = current;
-        else
-            PARSER_CDR(previous) = current;
+        (sexpr == NULL) ? (sexpr = current)
+                        : (PARSER_CDR(previous) = current);
     }
 
     // Parse expression
     if ((current = parser_write_cons_rule(parser_parse_expression)) == NULL)
         return NULL;
 
-    if (sexpr == NULL)
-        sexpr = current;
-    else
-        PARSER_CDR(previous) = current;
+    (sexpr == NULL) ? (sexpr = current)
+                    : (PARSER_CDR(previous) = current);
 
     // Parse expression*
     for (previous = current; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
@@ -304,6 +300,60 @@ static SExpr *parser_parse_list()
     parser_advance(); // skip trailing parenthesis
 
     return list;
+}
+
+static SExpr *parser_parse_binding()
+{
+    // Rule: "(" identifier expression ")"
+    SExpr *id, *expr;
+
+    if (parser.this.type != TOKEN_LEFT_PAREN)
+        return parser_failed("Expected binding.");
+    parser_advance(); // Skip the first parenthesis
+
+    if (parser.this.type != TOKEN_SYMBOL)
+        return parser_failed("Invalid define syntax. Expected symbol.");
+    id = parser_write_cons_atom(parser.this);
+
+    if ((expr = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Expected ')'.");
+
+    PARSER_CDR(id) = expr;
+    PARSER_CDR(expr) = parser_write_null();
+
+    parser_advance(); // Skip the trailing parenthesis
+
+    return id;
+}
+
+static SExpr *parser_parse_bindings()
+{
+    // Rule: "(" binding* ")"
+
+    SExpr *bindings, *previous, *current;
+    bindings = NULL;
+
+    if (parser.this.type != TOKEN_LEFT_PAREN)
+        return parser_failed("Expected binding specs.");
+    parser_advance(); // Skip the first parenthesis
+
+    for (previous = NULL; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
+    {
+        if ((current = parser_write_cons_rule(parser_parse_binding)) == NULL)
+            return NULL;
+
+        (previous == NULL) ? (bindings = current)
+                           : (PARSER_CDR(previous) = current);
+    }
+    (previous == NULL) ? (bindings = parser_write_null())
+                       : (PARSER_CDR(previous) = parser_write_null());
+
+    parser_advance(); // skip trailing parenthesis
+
+    return bindings;
 }
 
 static SExpr *parser_parse_datum()
@@ -412,7 +462,7 @@ static SExpr *parser_parse_lambda()
     if ((formals = parser_write_cons_rule(parser_parse_formals)) == NULL)
         return NULL;
 
-    if ((body = parser_write_cons_rule(parser_parse_body)) == NULL)
+    if ((body = parser_parse_body()) == NULL)
         return NULL;
 
     if (parser.this.type != TOKEN_RIGHT_PAREN)
@@ -420,10 +470,68 @@ static SExpr *parser_parse_lambda()
 
     PARSER_CDR(lambda) = formals;
     PARSER_CDR(formals) = body;
-    PARSER_CDR(body) = parser_write_null();
     parser_advance(); // skip trailing parenthesis
 
     return lambda;
+}
+
+static SExpr *parser_parse_let()
+{
+    // Rule: "(" "let" "(" binding_spec* ")" body ")"
+    SExpr *let, *bindings, *body;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_LET)
+        return parser_failed("Invalid expression syntax. Expected 'lambda'.");
+    let = parser_write_cons_atom(parser.this);
+
+    if ((bindings = parser_write_cons_rule(parser_parse_bindings)) == NULL)
+        return NULL;
+
+    if ((body = parser_parse_body()) == NULL)
+        return NULL;
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid let syntax. Expected ')'.");
+
+    PARSER_CDR(let) = bindings;
+    PARSER_CDR(bindings) = body;
+    parser_advance(); // skip trailing parenthesis
+
+    return let;
+}
+
+static SExpr *parser_parse_begin()
+{
+    // Rule: "(" "let" "(" binding_spec* ")" body ")"
+    SExpr *begin, *exprs, *previous, *current;
+    parser_advance(); // skip first parenthesis
+
+    if (parser.this.type != TOKEN_BEGIN)
+        return parser_failed("Invalid expression syntax. Expected 'lambda'.");
+    begin = parser_write_cons_atom(parser.this);
+
+    // Parse expression
+    if ((exprs = parser_write_cons_rule(parser_parse_expression)) == NULL)
+        return NULL;
+
+    // Parse expression*
+    for (previous = exprs; parser.this.type != TOKEN_RIGHT_PAREN; previous = current)
+    {
+        if ((current = parser_write_cons_rule(parser_parse_expression)) == NULL)
+            return NULL;
+
+        PARSER_CDR(previous) = current;
+    }
+    PARSER_CDR(previous) = parser_write_null();
+
+    if (parser.this.type != TOKEN_RIGHT_PAREN)
+        return parser_failed("Invalid let syntax. Expected ')'.");
+
+    PARSER_CDR(begin) = exprs;
+    parser_advance(); // skip trailing parenthesis
+
+    return begin;
 }
 
 static SExpr *parser_parse_if()
@@ -544,6 +652,10 @@ static SExpr *parser_parse_expression()
             return parser_parse_quote();
         case TOKEN_LAMBDA:
             return parser_parse_lambda();
+        case TOKEN_LET:
+            return parser_parse_let();
+        case TOKEN_BEGIN:
+            return parser_parse_begin();
         case TOKEN_IF:
             return parser_parse_if();
         case TOKEN_SET:

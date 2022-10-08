@@ -22,6 +22,8 @@ typedef enum
     // Core expressions.
     TOKEN_QUOTE,
     TOKEN_LAMBDA,
+    TOKEN_LET,
+    TOKEN_BEGIN,
     TOKEN_IF,
     TOKEN_SET,
     TOKEN_CALL_CC,

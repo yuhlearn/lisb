@@ -149,6 +149,8 @@ static TokenType scanner_identifier_type()
 #define SCANNER_ARGS(str1, str2) SCANNER_LENGTH(str1), SCANNER_LENGTH(str2), str2
     case '.':
         return scanner_check_keyword(SCANNER_ARGS(".", ""), TOKEN_DOT);
+    case 'b':
+        return scanner_check_keyword(SCANNER_ARGS("b", "egin"), TOKEN_BEGIN);
     case 'c':
         return scanner_check_keyword(SCANNER_ARGS("c", "all/cc"), TOKEN_CALL_CC);
     case 'd':
@@ -156,7 +158,14 @@ static TokenType scanner_identifier_type()
     case 'i':
         return scanner_check_keyword(SCANNER_ARGS("i", "f"), TOKEN_IF);
     case 'l':
-        return scanner_check_keyword(SCANNER_ARGS("l", "ambda"), TOKEN_LAMBDA);
+        if (scanner.current - scanner.start > 1)
+            switch (scanner.start[1])
+            {
+            case 'a':
+                return scanner_check_keyword(SCANNER_ARGS("la", "mbda"), TOKEN_LAMBDA);
+            case 'e':
+                return scanner_check_keyword(SCANNER_ARGS("le", "t"), TOKEN_LET);
+            }
     case 'q':
         return scanner_check_keyword(SCANNER_ARGS("q", "uote"), TOKEN_QUOTE);
     case 's':

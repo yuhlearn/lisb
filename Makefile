@@ -16,7 +16,7 @@ TEST_SOURCES := $(patsubst $(SRC)/%main.$(SRCEXT),, $(SOURCES))
 TEST_OBJECTS := $(patsubst $(SRC)/%,$(BUILD)/%,$(TEST_SOURCES:.$(SRCEXT)=.o))
 
 MAIN_LIBRARIES := -lreadline -lncurses
-TEST_LIBRARIES := -lcunit
+TEST_LIBRARIES := $(MAIN_LIBRARIES) -lcunit
 INCLUDES := -I $(SRC) -I $(INC)
 
 all: main

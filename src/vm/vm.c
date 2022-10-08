@@ -134,6 +134,12 @@ static InterpretResult vm_run()
         case OP_POP:
             vm_pop();
             break;
+        case OP_GET_LOCAL:
+        {
+            uint8_t slot = VM_READ_BYTE();
+            vm_push(vm.stack[slot]);
+            break;
+        }
         case OP_GET_GLOBAL:
         {
             ObjString *name = VM_READ_STRING();
@@ -151,6 +157,14 @@ static InterpretResult vm_run()
             ObjString *name = VM_READ_STRING();
             table_set(&vm.globals, name, vm_peek(0));
             vm_pop();
+            vm_push(VALUE_VOID_VAL);
+            break;
+        }
+        case OP_SET_LOCAL:
+        {
+            uint8_t slot = VM_READ_BYTE();
+            vm.stack[slot] = vm_pop();
+            vm_push(VALUE_VOID_VAL);
             break;
         }
         case OP_SET_GLOBAL:
@@ -179,7 +193,7 @@ static InterpretResult vm_run()
             break;
         case OP_RETURN:
         {
-            // value_print_value(vm_pop());
+            value_print_value(vm_pop());
             printf("\n");
             return VM_OK;
         }
@@ -225,19 +239,4 @@ InterpretResult vm_interpret(const char *source)
             return interpret_result;
     }
     parser_free_sexpr();
-    /*
-    if (!compiler_compile(source, &chunk))
-    {
-        chunk_free_chunk(&chunk);
-        return INTERPRET_COMPILE_ERROR;
-    }
-
-    vm.chunk = &chunk;
-    vm.ip = vm.chunk->code;
-
-    InterpretResult result = vm_run();
-
-    chunk_free_chunk(&chunk);
-    return result;
-    */
 }

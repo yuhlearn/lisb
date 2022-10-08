@@ -8,7 +8,7 @@ void scanner_scan_token_test()
 {
     const char *input =
         "-.!$%&*+-./:<=>?@^_~abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 \
-         -1234567890 #t #f . \"string\" ( ) call/cc define if lambda quote set! #";
+         -1234567890 #t #f . \"string\" ( ) call/cc define if lambda let begin quote set! #";
 
     scanner_init_scanner(input);
 
@@ -24,6 +24,8 @@ void scanner_scan_token_test()
     CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_DEFINE);
     CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_IF);
     CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_LAMBDA);
+    CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_LET);
+    CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_BEGIN);
     CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_QUOTE);
     CU_ASSERT_EQUAL(scanner_scan_token().type, TOKEN_SET);
 
