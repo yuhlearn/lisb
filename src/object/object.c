@@ -85,12 +85,22 @@ static void object_print_function(ObjFunction *function)
     printf("<fn %s>", function->name->chars);
 }
 
+ObjNative *object_new_native(NativeFn function)
+{
+    ObjNative *native = OBJECT_ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+    native->function = function;
+    return native;
+}
+
 void object_print_object(Value value)
 {
     switch (OBJECT_OBJ_TYPE(value))
     {
     case OBJ_FUNCTION:
         object_print_function(OBJECT_AS_FUNCTION(value));
+        break;
+    case OBJ_NATIVE:
+        printf("<native fn>");
         break;
     case OBJ_STRING:
         printf("%s", OBJECT_AS_CSTRING(value));

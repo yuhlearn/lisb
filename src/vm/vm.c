@@ -4,6 +4,7 @@
 #include <parser/parser.h>
 #include <compiler/compiler.h>
 #include <memory/memory.h>
+#include <primitive/primitive.h>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -15,6 +16,29 @@ static void vm_reset_stack()
 {
     vm.stack_top = vm.stack;
     vm.frame_count = 0;
+}
+
+void vm_free_vm()
+{
+    table_free_table(&vm.strings);
+    memory_free_objects();
+}
+
+void vm_push(Value value)
+{
+    *vm.stack_top = value;
+    vm.stack_top++;
+}
+
+Value vm_pop()
+{
+    vm.stack_top--;
+    return *vm.stack_top;
+}
+
+static Value vm_peek(int distance)
+{
+    return vm.stack_top[-1 - distance];
 }
 
 static void vm_runtime_error(const char *format, ...)
@@ -46,35 +70,33 @@ static void vm_runtime_error(const char *format, ...)
     vm_reset_stack();
 }
 
+static void vm_define_native(const char *name, NativeFn function)
+{
+    vm_push(VALUE_OBJ_VAL(object_copy_string(name, (int)strlen(name))));
+    vm_push(VALUE_OBJ_VAL(object_new_native(function)));
+    table_set(&vm.globals, OBJECT_AS_STRING(vm.stack[0]), vm.stack[1]);
+    vm_pop();
+    vm_pop();
+}
+
 void vm_init_vm()
 {
     vm_reset_stack();
     vm.objects = NULL;
     table_init_table(&vm.globals);
     table_init_table(&vm.strings);
-}
 
-void vm_free_vm()
-{
-    table_free_table(&vm.strings);
-    memory_free_objects();
-}
+    vm_define_native("clock", primitive_clock);
+    vm_define_native("+", primitive_add);
+    vm_define_native("-", primitive_sub);
+    vm_define_native("*", primitive_mup);
+    vm_define_native("/", primitive_div);
 
-void vm_push(Value value)
-{
-    *vm.stack_top = value;
-    vm.stack_top++;
-}
-
-Value vm_pop()
-{
-    vm.stack_top--;
-    return *vm.stack_top;
-}
-
-static Value vm_peek(int distance)
-{
-    return vm.stack_top[-1 - distance];
+    vm_define_native("=", primitive_num_eq);
+    vm_define_native("<", primitive_num_le);
+    vm_define_native(">", primitive_num_ge);
+    vm_define_native("<=", primitive_num_leq);
+    vm_define_native(">=", primitive_num_geq);
 }
 
 static bool vm_call(ObjFunction *function, int arg_count)
@@ -109,6 +131,14 @@ static bool vm_call_value(Value callee, int arg_count)
         {
         case OBJ_FUNCTION:
             return vm_call(OBJECT_AS_FUNCTION(callee), arg_count);
+        case OBJ_NATIVE:
+        {
+            NativeFn native = OBJECT_AS_NATIVE(callee);
+            Value result = native(arg_count, vm.stack_top - arg_count);
+            vm.stack_top -= arg_count + 1;
+            vm_push(result);
+            return true;
+        }
         default:
             break; // Non-callable object type.
         }
@@ -145,18 +175,6 @@ static InterpretResult vm_run()
 #define VM_READ_CONSTANT() (frame->function->chunk.constants.values[VM_READ_BYTE()])
 #define VM_READ_SHORT() (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define VM_READ_STRING() OBJECT_AS_STRING(VM_READ_CONSTANT())
-#define VM_BINARY_OP(value_type, op)                                      \
-    do                                                                    \
-    {                                                                     \
-        if (!VALUE_IS_NUMBER(vm_peek(0)) || !VALUE_IS_NUMBER(vm_peek(1))) \
-        {                                                                 \
-            vm_runtime_error("Operands must be numbers.");                \
-            return VM_RUNTIME_ERROR;                                      \
-        }                                                                 \
-        double b = VALUE_AS_NUMBER(vm_pop());                             \
-        double a = VALUE_AS_NUMBER(vm_pop());                             \
-        vm_push(value_type(a op b));                                      \
-    } while (false)
 
     for (;;)
     {
@@ -239,18 +257,6 @@ static InterpretResult vm_run()
             vm_push(VALUE_VOID_VAL);
             break;
         }
-        case OP_ADD:
-            VM_BINARY_OP(VALUE_NUMBER_VAL, +);
-            break;
-        case OP_SUBTRACT:
-            VM_BINARY_OP(VALUE_NUMBER_VAL, -);
-            break;
-        case OP_MULTIPLY:
-            VM_BINARY_OP(VALUE_NUMBER_VAL, *);
-            break;
-        case OP_DIVIDE:
-            VM_BINARY_OP(VALUE_NUMBER_VAL, /);
-            break;
         case OP_JUMP:
         {
             uint16_t offset = VM_READ_SHORT();

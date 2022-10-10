@@ -30,6 +30,9 @@ static void memory_free_object(Obj *object)
         MEMORY_FREE(ObjFunction, object);
         break;
     }
+    case OBJ_NATIVE:
+        MEMORY_FREE(ObjNative, object);
+        break;
     case OBJ_STRING:
     {
         ObjString *string = (ObjString *)object;

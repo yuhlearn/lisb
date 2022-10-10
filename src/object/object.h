@@ -8,15 +8,18 @@
 #define OBJECT_OBJ_TYPE(value) (VALUE_AS_OBJ(value)->type)
 
 #define OBJECT_IS_FUNCTION(value) object_is_obj_type(value, OBJ_FUNCTION)
+#define OBJECT_IS_NATIVE(value) object_is_obj_type(value, OBJ_NATIVE)
 #define OBJECT_IS_STRING(value) object_is_obj_type(value, OBJ_STRING)
 
 #define OBJECT_AS_FUNCTION(value) ((ObjFunction *)VALUE_AS_OBJ(value))
+#define OBJECT_AS_NATIVE(value) (((ObjNative *)VALUE_AS_OBJ(value))->function)
 #define OBJECT_AS_STRING(value) ((ObjString *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_CSTRING(value) (((ObjString *)VALUE_AS_OBJ(value))->chars)
 
 typedef enum
 {
     OBJ_FUNCTION,
+    OBJ_NATIVE,
     OBJ_STRING,
 } ObjType;
 
@@ -34,6 +37,14 @@ typedef struct
     ObjString *name;
 } ObjFunction;
 
+typedef Value (*NativeFn)(int arcg_cout, Value *args);
+
+typedef struct
+{
+    Obj obj;
+    NativeFn function;
+} ObjNative;
+
 struct ObjString
 {
     Obj obj;
@@ -43,6 +54,7 @@ struct ObjString
 };
 
 ObjFunction *object_new_function();
+ObjNative *object_new_native(NativeFn function);
 ObjString *object_take_string(char *chars, int length);
 ObjString *object_copy_string(const char *chars, int length);
 void object_print_object(Value value);
