@@ -31,7 +31,7 @@ int rlgets(char *buffer, const int n, const int line_count)
 	char *line = NULL;
 	int length = 0;
 
-	sprintf(prompt, "%d> ", line_count);
+	sprintf(prompt, "> ");
 	line = readline(prompt);
 
 	if (line && *line)

@@ -19,6 +19,15 @@ static Obj *object_allocate_object(size_t size, ObjType type)
     return object;
 }
 
+ObjFunction *object_new_function()
+{
+    ObjFunction *function = OBJECT_ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
+    function->arity = 0;
+    function->name = NULL;
+    chunk_init_chunk(&function->chunk);
+    return function;
+}
+
 static ObjString *object_allocate_string(char *chars, int length, uint32_t hash)
 {
     ObjString *string = OBJECT_ALLOCATE_OBJ(ObjString, OBJ_STRING);
@@ -66,10 +75,23 @@ ObjString *object_copy_string(const char *chars, int length)
     return object_allocate_string(heap_chars, length, hash);
 }
 
+static void object_print_function(ObjFunction *function)
+{
+    if (function->name == NULL)
+    {
+        printf("<script>");
+        return;
+    }
+    printf("<fn %s>", function->name->chars);
+}
+
 void object_print_object(Value value)
 {
     switch (OBJECT_OBJ_TYPE(value))
     {
+    case OBJ_FUNCTION:
+        object_print_function(OBJECT_AS_FUNCTION(value));
+        break;
     case OBJ_STRING:
         printf("%s", OBJECT_AS_CSTRING(value));
         break;

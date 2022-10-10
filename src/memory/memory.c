@@ -23,6 +23,13 @@ static void memory_free_object(Obj *object)
 {
     switch (object->type)
     {
+    case OBJ_FUNCTION:
+    {
+        ObjFunction *function = (ObjFunction *)object;
+        chunk_free_chunk(&function->chunk);
+        MEMORY_FREE(ObjFunction, object);
+        break;
+    }
     case OBJ_STRING:
     {
         ObjString *string = (ObjString *)object;

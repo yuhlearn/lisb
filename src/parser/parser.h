@@ -6,6 +6,13 @@
 
 typedef enum
 {
+    PARSER_OK,
+    PARSER_EOF,
+    PARSER_ERROR,
+} ParseResult;
+
+typedef enum
+{
     SEXPR_CONS,
     SEXPR_NULL,
     SEXPR_ATOM,
@@ -75,7 +82,7 @@ typedef struct SExpr
 
 Token parser_get_error_token();
 void parser_init_parser(const char *source);
-CompileResult parser_parse(SExpr **sexpr);
+ParseResult parser_parse(SExpr **sexpr);
 void parser_free_sexpr();
 
 #endif

@@ -14,6 +14,7 @@ VM vm;
 static void vm_reset_stack()
 {
     vm.stack_top = vm.stack;
+    vm.frame_count = 0;
 }
 
 static void vm_runtime_error(const char *format, ...)
@@ -24,9 +25,24 @@ static void vm_runtime_error(const char *format, ...)
     va_end(args);
     fputs("\n", stderr);
 
-    size_t instruction = vm.ip - vm.chunk->code - 1;
-    int line = vm.chunk->lines[instruction];
-    fprintf(stderr, "[line %d] in script\n", line);
+    // Print the stack trace
+    for (int i = vm.frame_count - 1; i >= 0; i--)
+    {
+        CallFrame *frame = &vm.frames[i];
+        ObjFunction *function = frame->function;
+        size_t instruction = frame->ip - function->chunk.code - 1;
+        fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
+
+        if (function->name == NULL)
+        {
+            fprintf(stderr, "script\n");
+        }
+        else
+        {
+            fprintf(stderr, "%s()\n", function->name->chars);
+        }
+    }
+
     vm_reset_stack();
 }
 
@@ -61,6 +77,46 @@ static Value vm_peek(int distance)
     return vm.stack_top[-1 - distance];
 }
 
+static bool vm_call(ObjFunction *function, int arg_count)
+{
+    if (arg_count != function->arity)
+    {
+        vm_runtime_error("Expected %d arguments but got %d.",
+                         function->arity, arg_count);
+        return false;
+    }
+
+    if (vm.frame_count == VM_FRAMES_MAX)
+    {
+        vm_runtime_error("Stack overflow.");
+        return false;
+    }
+
+    CallFrame *frame = &vm.frames[vm.frame_count++];
+
+    frame->function = function;
+    frame->ip = function->chunk.code;
+    frame->slots = vm.stack_top - arg_count - 1;
+
+    return true;
+}
+
+static bool vm_call_value(Value callee, int arg_count)
+{
+    if (VALUE_IS_OBJ(callee))
+    {
+        switch (OBJECT_OBJ_TYPE(callee))
+        {
+        case OBJ_FUNCTION:
+            return vm_call(OBJECT_AS_FUNCTION(callee), arg_count);
+        default:
+            break; // Non-callable object type.
+        }
+    }
+    vm_runtime_error("Application not a procedure.");
+    return false;
+}
+
 static bool vm_is_falsey(Value value)
 {
     return VALUE_IS_BOOL(value) && !VALUE_AS_BOOL(value);
@@ -83,9 +139,11 @@ static void concatenate()
 
 static InterpretResult vm_run()
 {
-#define VM_READ_BYTE() (*vm.ip++)
-#define VM_READ_CONSTANT() (vm.chunk->constants.values[VM_READ_BYTE()])
-#define VM_READ_SHORT() (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+    CallFrame *frame = &vm.frames[vm.frame_count - 1];
+
+#define VM_READ_BYTE() (*frame->ip++)
+#define VM_READ_CONSTANT() (frame->function->chunk.constants.values[VM_READ_BYTE()])
+#define VM_READ_SHORT() (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define VM_READ_STRING() OBJECT_AS_STRING(VM_READ_CONSTANT())
 #define VM_BINARY_OP(value_type, op)                                      \
     do                                                                    \
@@ -112,7 +170,8 @@ static InterpretResult vm_run()
         }
         printf("\n");
 
-        debug_disassemble_instruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
+        debug_disassemble_instruction(&frame->function->chunk,
+                                      (int)(frame->ip - frame->function->chunk.code));
 #endif
         uint8_t instruction;
         switch (instruction = VM_READ_BYTE())
@@ -138,7 +197,7 @@ static InterpretResult vm_run()
         case OP_GET_LOCAL:
         {
             uint8_t slot = VM_READ_BYTE();
-            vm_push(vm.stack[slot]);
+            vm_push(frame->slots[slot]);
             break;
         }
         case OP_GET_GLOBAL:
@@ -164,7 +223,7 @@ static InterpretResult vm_run()
         case OP_SET_LOCAL:
         {
             uint8_t slot = VM_READ_BYTE();
-            vm.stack[slot] = vm_pop();
+            frame->slots[slot] = vm_pop(0);
             vm_push(VALUE_VOID_VAL);
             break;
         }
@@ -195,21 +254,42 @@ static InterpretResult vm_run()
         case OP_JUMP:
         {
             uint16_t offset = VM_READ_SHORT();
-            vm.ip += offset;
+            frame->ip += offset;
             break;
         }
         case OP_JUMP_IF_FALSE:
         {
             uint16_t offset = VM_READ_SHORT();
             if (vm_is_falsey(vm_peek(0)))
-                vm.ip += offset;
+                frame->ip += offset;
+            break;
+        }
+        case OP_CALL:
+        {
+            int arg_count = VM_READ_BYTE();
+            if (!vm_call_value(vm_peek(arg_count), arg_count))
+            {
+                return VM_RUNTIME_ERROR;
+            }
+            frame = &vm.frames[vm.frame_count - 1];
             break;
         }
         case OP_RETURN:
         {
-            value_print_value(vm_pop());
-            printf("\n");
-            return VM_OK;
+            Value result = vm_pop();
+            vm.frame_count--;
+            if (vm.frame_count == 0)
+            {
+                vm_pop();
+                value_print_value(result);
+                printf("\n");
+                return VM_OK;
+            }
+
+            vm.stack_top = frame->slots;
+            vm_push(result);
+            frame = &vm.frames[vm.frame_count - 1];
+            break;
         }
         }
     }
@@ -223,35 +303,12 @@ static InterpretResult vm_run()
 
 InterpretResult vm_interpret(const char *source)
 {
-    CompileResult compile_result;
-    InterpretResult interpret_result;
-    Chunk chunk;
+    ObjFunction *function = compiler_compile(source);
+    if (function == NULL)
+        return VM_COMPILE_ERROR;
 
-    parser_init_parser(source);
-    for (;;)
-    {
-        chunk_init_chunk(&chunk);
-        compile_result = compiler_compile(source, &chunk);
+    vm_push(VALUE_OBJ_VAL(function));
+    vm_call(function, 0);
 
-        if (compile_result != COMPILER_OK)
-        {
-            parser_free_sexpr();
-            chunk_free_chunk(&chunk);
-
-            if (compile_result == COMPILER_COMPILE_ERROR)
-                return VM_COMPILE_ERROR;
-
-            // EOF - exit compiler successfully
-            return VM_OK;
-        }
-
-        vm.chunk = &chunk;
-        vm.ip = vm.chunk->code;
-        interpret_result = vm_run();
-        chunk_free_chunk(&chunk);
-
-        if (interpret_result == VM_RUNTIME_ERROR)
-            return interpret_result;
-    }
-    parser_free_sexpr();
+    return vm_run();
 }

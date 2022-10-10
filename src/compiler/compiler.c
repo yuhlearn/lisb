@@ -17,8 +17,18 @@ typedef struct
     int depth;
 } Local;
 
+typedef enum
+{
+    TYPE_FUNCTION,
+    TYPE_SCRIPT
+} FunctionType;
+
 typedef struct
 {
+    struct Environment *enclosing;
+    ObjFunction *function;
+    FunctionType type;
+
     Local locals[UINT8_COUNT];
     int local_count;
     int scope_depth;
@@ -39,7 +49,7 @@ static void compiler_compile_define(const SExpr *sexpr);
 
 static Chunk *compiler_current_chunk()
 {
-    return compiling_chunk;
+    return &current->function->chunk;
 }
 
 /* Error management */
@@ -65,7 +75,11 @@ static void compiler_failed_at(Token *token, const char *message)
     compiler.failed = true;
 }
 
-/* Utility functions */
+static void compiler_failed(const char *message)
+{
+    fprintf(stderr, "[%d:%d] Compiler failed: %s\n", message);
+    compiler.failed = true;
+}
 
 /* Emit code */
 
@@ -108,17 +122,6 @@ static uint8_t compiler_make_constant(Value value)
 static void compiler_emit_constant(Value value)
 {
     compiler_emit_bytes(OP_CONSTANT, compiler_make_constant(value));
-}
-
-static void compiler_end_compiler()
-{
-    compiler_emit_return();
-#ifdef DEBUG_PRINT_CODE
-    if (!compiler.failed)
-    {
-        debug_disassemble_chunk(compiler_current_chunk(), "code");
-    }
-#endif
 }
 
 static void compiler_patch_jump(int offset)
@@ -222,6 +225,45 @@ static void compiler_end_scope()
 
 /* Compilation */
 
+static void compiler_init_environment(Environment *env, FunctionType type)
+{
+    env->enclosing = current;
+    env->function = NULL;
+    env->type = type;
+    env->local_count = 0;
+    env->scope_depth = 0;
+    env->function = object_new_function();
+    current = env;
+
+    if (type != TYPE_SCRIPT)
+    {
+        current->function->name = object_copy_string("lambda", 6);
+    }
+
+    Local *local = &current->locals[current->local_count++];
+    local->depth = 0;
+    local->name.start = "";
+    local->name.length = 0;
+}
+
+static ObjFunction *compiler_end_environment()
+{
+    compiler_emit_return();
+    ObjFunction *function = current->function;
+
+#ifdef DEBUG_PRINT_CODE
+    if (!compiler.failed)
+    {
+        debug_disassemble_chunk(compiler_current_chunk(),
+                                current->type == TYPE_FUNCTION ? "<function>"
+                                                               : "<script>");
+    }
+#endif
+
+    current = current->enclosing;
+    return function;
+}
+
 static bool compiler_is_definition(const SExpr *sexpr)
 {
     if (PARSER_TYPE(sexpr) == SEXPR_CONS &&
@@ -256,6 +298,8 @@ static uint8_t compiler_compile_variable(Token name)
 
 static void compiler_mark_initialized()
 {
+    if (current->scope_depth == 0)
+        return;
     current->locals[current->local_count - 1].depth =
         current->scope_depth;
 }
@@ -322,6 +366,46 @@ static void compiler_compile_atomic_expression(const SExpr *sexpr)
                            "Unknown symbol.");
         break;
     }
+}
+
+static void compiler_compile_lambda_expression(const SExpr *sexpr)
+{
+    SExpr *def;
+    Environment env;
+
+    compiler_init_environment(&env, TYPE_FUNCTION);
+
+    compiler_begin_scope();
+
+    for (SExpr *formal = PARSER_CDAR(sexpr); !PARSER_IS_NULL(formal); formal = PARSER_CDR(formal))
+    {
+        current->function->arity++;
+        if (current->function->arity > 255)
+        {
+            compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(formal)), "Can't have more than 255 parameters.");
+        }
+        uint8_t var = compiler_compile_variable(PARSER_AS_ATOM(PARSER_CAR(formal)));
+        compiler_define_variable(var);
+    }
+
+    for (def = PARSER_CDDR(sexpr); compiler_is_definition(PARSER_CAR(def)); def = PARSER_CDR(def))
+    {
+        compiler_compile_define(PARSER_CAR(def));
+    }
+
+    for (SExpr *expr = def; !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
+    {
+        compiler_compile_expression(PARSER_CAR(expr));
+
+        if (!PARSER_IS_NULL(PARSER_CDR(expr)))
+            compiler_emit_byte(OP_POP);
+    }
+
+    // End the environment and emit implicit return
+    ObjFunction *function = compiler_end_environment();
+
+    // Push the function to the stack
+    compiler_emit_bytes(OP_CONSTANT, compiler_make_constant(VALUE_OBJ_VAL(function)));
 }
 
 static void compiler_compile_set_expression(const SExpr *sexpr)
@@ -392,10 +476,32 @@ static void compiler_compile_if_expression(const SExpr *sexpr)
     compiler_patch_jump(else_jump);
 }
 
+static void compiler_compile_application_expression(const SExpr *sexpr)
+{
+    const SExpr *expr = sexpr;
+    uint8_t arg_count = 0;
+
+    compiler_compile_expression(PARSER_CAR(expr));
+
+    for (expr = PARSER_CDR(expr); !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
+    {
+        compiler_compile_expression(PARSER_CAR(expr));
+
+        if (arg_count >= 255)
+            compiler_failed("Can't have more than 255 arguments.");
+        arg_count++;
+    }
+
+    compiler_emit_bytes(OP_CALL, arg_count);
+}
+
 static void compiler_compile_compound_expression(const SExpr *sexpr)
 {
     switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
     {
+    case TOKEN_LAMBDA:
+        compiler_compile_lambda_expression(sexpr);
+        break;
     case TOKEN_SET:
         compiler_compile_set_expression(sexpr);
         break;
@@ -409,8 +515,7 @@ static void compiler_compile_compound_expression(const SExpr *sexpr)
         compiler_compile_if_expression(sexpr);
         break;
     default:
-        compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(sexpr)),
-                           "Unknown symbol.");
+        compiler_compile_application_expression(sexpr);
         break;
     }
 }
@@ -469,42 +574,32 @@ static void compiler_compile_form(const SExpr *sexpr)
     }
 }
 
-static void compiler_init_environment(Environment *env)
-{
-    env->local_count = 0;
-    env->scope_depth = 0;
-    current = env;
-}
-
-static void compiler_init_compiler()
-{
-    compiler.failed = false;
-}
-
-CompileResult compiler_compile(const char *source, Chunk *chunk)
+ObjFunction *compiler_compile(const char *source)
 {
     SExpr *sexpr;
-    CompileResult result;
-    compiling_chunk = chunk;
     Environment env;
-    compiler_init_environment(&env);
-    compiler_init_compiler();
+    parser_init_parser(source);
+    compiler_init_environment(&env, TYPE_SCRIPT);
 
-    result = parser_parse(&sexpr);
+    compiler.failed = false;
 
-    if (result == COMPILER_OK)
+    ParseResult result = parser_parse(&sexpr);
+
+    if (result == PARSER_OK)
     {
 #ifdef DEBUG_PRINT_CODE
-        printf("s-expr: ", source);
+        printf("s-expr: ");
         debug_disassemble_sexpression(sexpr);
         printf("\n");
 #endif
         compiler_compile_form(sexpr);
-        compiler_end_compiler();
+        ObjFunction *function = compiler_end_environment();
+        // parser_free_sexpr();
 
-        if (compiler.failed)
-            result = COMPILER_COMPILE_ERROR;
+        if (!compiler.failed)
+        {
+            return function;
+        }
     }
-
-    return result;
+    return NULL;
 }

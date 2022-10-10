@@ -83,19 +83,6 @@ static void parser_advance()
     parser.lookahead = scanner_scan_token();
 }
 
-static bool parser_check(TokenType type)
-{
-    return parser.lookahead.type == type;
-}
-
-static bool parser_match(TokenType type)
-{
-    if (!parser_check(type))
-        return false;
-    parser_advance();
-    return true;
-}
-
 static bool parser_is_definition()
 {
     if (parser.this.type == TOKEN_LEFT_PAREN)
@@ -121,7 +108,6 @@ static SExpr *parser_write_sexpr_array(SExpr value)
                                                       old_capacity,
                                                       parser.sexpr_array.capacity);
     }
-
     parser.sexpr_array.sexprs[parser.sexpr_array.count] = value;
     SExpr *sexpr = parser.sexpr_array.sexprs + parser.sexpr_array.count;
     parser.sexpr_array.count++;
@@ -698,9 +684,9 @@ void parser_reset_parser()
     };
     parser.error_token = token;
 
-    parser.sexpr_array.capacity = 0;
+    // parser.sexpr_array.capacity = 0;
     parser.sexpr_array.count = 0;
-    parser.sexpr_array.sexprs = NULL;
+    // parser.sexpr_array.sexprs = NULL;
 }
 
 void parser_init_parser(const char *source)
@@ -716,14 +702,22 @@ void parser_init_parser(const char *source)
     parser_advance();
 }
 
-CompileResult parser_parse(SExpr **sexpr)
+void parser_free_sexpr()
+{
+    MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, 0);
+    parser.sexpr_array.capacity = 0;
+    parser.sexpr_array.count = 0;
+    parser.sexpr_array.sexprs = NULL;
+}
+
+ParseResult parser_parse(SExpr **sexpr)
 {
     parser_reset_parser();
 
     if (parser.this.type == TOKEN_EOF)
     {
         *sexpr = NULL;
-        return COMPILER_EOF;
+        return PARSER_EOF;
     }
 
     *sexpr = parser_parse_form();
@@ -732,16 +726,12 @@ CompileResult parser_parse(SExpr **sexpr)
     {
         if (PARSER_IS_EOF(*sexpr, parser_get_error_token()))
         {
-            printf("here\n");
-            return COMPILER_EOF;
+            printf("We should never get here!\n");
+            return PARSER_EOF;
         }
+        // parser_free_sexpr();
 
-        return COMPILER_COMPILE_ERROR;
+        return PARSER_ERROR;
     }
-    return COMPILER_OK;
-}
-
-void parser_free_sexpr()
-{
-    MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, 0);
+    return PARSER_OK;
 }
