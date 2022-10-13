@@ -1,6 +1,7 @@
 #include <debug/debug.h>
 #include <value/value.h>
 #include <scanner/scanner.h>
+#include <object/object.h>
 
 #include <stdio.h>
 
@@ -83,20 +84,38 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
         return debug_constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
     case OP_SET_GLOBAL:
         return debug_constant_instruction("OP_SET_GLOBAL", chunk, offset);
-    case OP_ADD:
-        return debug_simple_instruction("OP_ADD", offset);
-    case OP_SUBTRACT:
-        return debug_simple_instruction("OP_SUBTRACT", offset);
-    case OP_MULTIPLY:
-        return debug_simple_instruction("OP_MULTIPLY", offset);
-    case OP_DIVIDE:
-        return debug_simple_instruction("OP_DIVIDE", offset);
+    case OP_GET_UPVALUE:
+        return debug_byte_instruction("OP_GET_UPVALUE", chunk, offset);
+    case OP_SET_UPVALUE:
+        return debug_byte_instruction("OP_SET_UPVALUE", chunk, offset);
     case OP_JUMP:
         return debug_jump_instruction("OP_JUMP", 1, chunk, offset);
     case OP_JUMP_IF_FALSE:
         return debug_jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
     case OP_CALL:
         return debug_byte_instruction("OP_CALL", chunk, offset);
+    case OP_CLOSURE:
+    {
+        offset++;
+        uint8_t constant = chunk->code[offset++];
+        printf("%-16s %4d ", "OP_CLOSURE", constant);
+        value_print_value(chunk->constants.values[constant]);
+        printf("\n");
+
+        ObjFunction *function = OBJECT_AS_FUNCTION(
+            chunk->constants.values[constant]);
+        for (int j = 0; j < function->upvalue_count; j++)
+        {
+            int is_local = chunk->code[offset++];
+            int index = chunk->code[offset++];
+            printf("%04d      |                     %s %d\n",
+                   offset - 2, is_local ? "local" : "upvalue", index);
+        }
+
+        return offset;
+    }
+    case OP_CLOSE_UPVALUE:
+        return debug_simple_instruction("OP_CLOSE_UPVALUE", offset);
     case OP_RETURN:
         return debug_simple_instruction("OP_RETURN", offset);
     default:

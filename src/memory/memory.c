@@ -23,6 +23,13 @@ static void memory_free_object(Obj *object)
 {
     switch (object->type)
     {
+    case OBJ_CLOSURE:
+    {
+        MEMORY_FREE(ObjClosure, object);
+        ObjClosure *closure = (ObjClosure *)object;
+        MEMORY_FREE_ARRAY(ObjUpvalue *, closure->upvalues, closure->upvalue_count);
+        break;
+    }
     case OBJ_FUNCTION:
     {
         ObjFunction *function = (ObjFunction *)object;
@@ -40,6 +47,9 @@ static void memory_free_object(Obj *object)
         MEMORY_FREE(ObjString, object);
         break;
     }
+    case OBJ_UPVALUE:
+        MEMORY_FREE(ObjUpvalue, object);
+        break;
     }
 }
 

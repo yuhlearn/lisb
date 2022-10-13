@@ -15,7 +15,14 @@ typedef struct
 {
     Token name;
     int depth;
+    bool is_captured;
 } Local;
+
+typedef struct
+{
+    uint8_t index;
+    bool is_local;
+} Upvalue;
 
 typedef enum
 {
@@ -23,7 +30,7 @@ typedef enum
     TYPE_SCRIPT
 } FunctionType;
 
-typedef struct
+typedef struct Environment
 {
     struct Environment *enclosing;
     ObjFunction *function;
@@ -31,6 +38,7 @@ typedef struct
 
     Local locals[UINT8_COUNT];
     int local_count;
+    Upvalue upvalues[UINT8_COUNT];
     int scope_depth;
 } Environment;
 
@@ -171,6 +179,52 @@ static int compiler_resolve_local(Environment *env, Token *name)
     return -1;
 }
 
+static int compiler_add_upvalue(Environment *env, uint8_t index, bool is_local)
+{
+    int upvalue_count = env->function->upvalue_count;
+
+    for (int i = 0; i < upvalue_count; i++)
+    {
+        Upvalue *upvalue = &env->upvalues[i];
+        if (upvalue->index == index && upvalue->is_local == is_local)
+        {
+            return i;
+        }
+    }
+
+    if (upvalue_count == UINT8_COUNT)
+    {
+        compiler_failed("Too many closure variables in function.");
+        return 0;
+    }
+
+    env->upvalues[upvalue_count].is_local = is_local;
+    env->upvalues[upvalue_count].index = index;
+    return env->function->upvalue_count++;
+}
+
+static int compiler_resolve_upvalue(Environment *env, Token *name)
+{
+    if (env->enclosing == NULL)
+        return -1;
+
+    int local = compiler_resolve_local(env->enclosing, name);
+
+    if (local != -1)
+    {
+        env->enclosing->locals[local].is_captured = true;
+        return compiler_add_upvalue(env, (uint8_t)local, true);
+    }
+
+    int upvalue = compiler_resolve_upvalue(env->enclosing, name);
+    if (upvalue != -1)
+    {
+        return compiler_add_upvalue(env, (uint8_t)upvalue, false);
+    }
+
+    return -1;
+}
+
 static void compiler_add_local(Token name)
 {
     if (current->local_count == UINT8_COUNT)
@@ -182,6 +236,7 @@ static void compiler_add_local(Token name)
     Local *local = &current->locals[current->local_count++];
     local->name = name;
     local->depth = -1;
+    local->is_captured = false;
 }
 
 static void compiler_declare_variable(Token name)
@@ -218,7 +273,14 @@ static void compiler_end_scope()
     while (current->local_count > 0 &&
            current->locals[current->local_count - 1].depth > current->scope_depth)
     {
-        compiler_emit_byte(OP_POP);
+        if (current->locals[current->local_count - 1].is_captured)
+        {
+            compiler_emit_byte(OP_CLOSE_UPVALUE);
+        }
+        else
+        {
+            compiler_emit_byte(OP_POP);
+        }
         current->local_count--;
     }
 }
@@ -242,6 +304,7 @@ static void compiler_init_environment(Environment *env, FunctionType type)
 
     Local *local = &current->locals[current->local_count++];
     local->depth = 0;
+    local->is_captured = false;
     local->name.start = "";
     local->name.length = 0;
 }
@@ -313,6 +376,11 @@ static void compiler_compile_named_variable(Token name, bool assign)
     {
         get_op = OP_GET_LOCAL;
         set_op = OP_SET_LOCAL;
+    }
+    else if ((arg = compiler_resolve_upvalue(current, &name)) != -1)
+    {
+        get_op = OP_GET_UPVALUE;
+        set_op = OP_SET_UPVALUE;
     }
     else
     {
@@ -405,7 +473,13 @@ static void compiler_compile_lambda_expression(const SExpr *sexpr)
     ObjFunction *function = compiler_end_environment();
 
     // Push the function to the stack
-    compiler_emit_bytes(OP_CONSTANT, compiler_make_constant(VALUE_OBJ_VAL(function)));
+    compiler_emit_bytes(OP_CLOSURE, compiler_make_constant(VALUE_OBJ_VAL(function)));
+
+    for (int i = 0; i < function->upvalue_count; i++)
+    {
+        compiler_emit_byte(env.upvalues[i].is_local ? 1 : 0);
+        compiler_emit_byte(env.upvalues[i].index);
+    }
 }
 
 static void compiler_compile_set_expression(const SExpr *sexpr)
