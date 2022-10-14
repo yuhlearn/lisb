@@ -22,7 +22,7 @@ This is an ongoing project. For more information about what is has been done and
 * [x] Function definitions and applications.
 * [x] Support for primitive functions.
 * [x] Implement closures.
-* [ ] Support for garbage collection.
+* [x] Support for garbage collection.
 * [ ] Implement continuations.
 * [ ] Implement quotes and evaluation.
 * [ ] Support tail recursion.
