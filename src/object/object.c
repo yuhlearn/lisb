@@ -14,8 +14,14 @@ static Obj *object_allocate_object(size_t size, ObjType type)
 {
     Obj *object = (Obj *)memory_reallocate(NULL, 0, size);
     object->type = type;
+    object->is_marked = false;
     object->next = vm.objects;
     vm.objects = object;
+
+#ifdef DEBUG_LOG_GC
+    printf("%p allocate %zu for %d\n", (void *)object, size, type);
+#endif
+
     return object;
 }
 
@@ -48,10 +54,17 @@ ObjFunction *object_new_function()
 static ObjString *object_allocate_string(char *chars, int length, uint32_t hash)
 {
     ObjString *string = OBJECT_ALLOCATE_OBJ(ObjString, OBJ_STRING);
+
     string->length = length;
     string->chars = chars;
     string->hash = hash;
+
+    // Push then pop the string to the constant table so it doesn't get
+    // garbage collected before being interned
+    vm_push(VALUE_OBJ_VAL(string));
     table_set(&vm.strings, string, VALUE_NULL_VAL);
+    vm_pop();
+
     return string;
 }
 

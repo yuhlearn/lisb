@@ -1,5 +1,6 @@
 #include <chunk/chunk.h>
 #include <memory/memory.h>
+#include <vm/vm.h>
 
 #include <stdlib.h>
 
@@ -37,6 +38,11 @@ void chunk_write_chunk(Chunk *chunk, uint8_t byte, int line)
 
 int chunk_add_constant(Chunk *chunk, Value value)
 {
+    // Push and pop the value so it doesn't get garbage collected before written
+    // to the constant table.
+    vm_push(value);
     value_write_value_array(&chunk->constants, value);
+    vm_pop();
+
     return chunk->constants.count - 1;
 }

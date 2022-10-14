@@ -26,7 +26,14 @@ typedef struct
     Table globals;
     Table strings;
     ObjUpvalue *open_upvalues;
+
+    size_t bytes_allocated;
+    size_t next_gc;
     Obj *objects;
+
+    int gray_count;
+    int gray_capacity;
+    Obj **gray_stack;
 } VM;
 
 typedef enum
@@ -41,5 +48,8 @@ extern VM vm;
 void vm_init_vm();
 void vm_free_vm();
 InterpretResult vm_interpret(const char *source);
+
+Value vm_pop();
+void vm_push(Value value);
 
 #endif

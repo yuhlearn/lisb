@@ -2,6 +2,7 @@
 #include <common/common.h>
 #include <parser/parser.h>
 #include <object/object.h>
+#include <memory/memory.h>
 
 #ifdef DEBUG_PRINT_CODE
 #include <debug/debug.h>
@@ -676,4 +677,15 @@ ObjFunction *compiler_compile(const char *source)
         }
     }
     return NULL;
+}
+
+void compiler_mark_compiler_roots()
+{
+    Environment *env = current;
+
+    while (env != NULL)
+    {
+        memory_mark_object((Obj *)env->function);
+        env = env->enclosing;
+    }
 }

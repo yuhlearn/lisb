@@ -19,6 +19,9 @@
     memory_reallocate(pointer, sizeof(type) * (oldCount), 0)
 
 void *memory_reallocate(void *pointer, size_t oldSize, size_t newSize);
+void memory_mark_object(Obj *object);
+void memory_mark_value(Value value);
+void memory_collect_garbage();
 void memory_free_objects();
 
 #endif
