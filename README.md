@@ -16,7 +16,7 @@ Much of the work is owed to the book *Crafting Interpreters*, especially the imp
 
 This is an ongoing project. For more information about what is has been done and what is left to do, see the roadmap below. I have tried to outline the most core aspects of the langue that I deem necessary to implement before I can progress and implement the language as a whole. For example, the fact that I have checked the box for *primitive functions* does not mean that I have implemented every primitive in the standard library, but that I have built the foundation for doing that. The idea is that I will update the roadmap with new goals as I continue to work on the project. I also haven't included things that I consider too small or part of a larger goal.
 
-* [x] Generating s-expressions for source code.
+* [x] Generating s-expressions from source code.
 * [x] Support global and local variables (including scopes).
 * [x] If-expressions and jumps.
 * [x] Function definitions and applications.
