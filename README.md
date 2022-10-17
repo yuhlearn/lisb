@@ -6,9 +6,9 @@ A stack-based Scheme bytecode interpreter.
 
 This my attempt at implementing a complete Scheme interpreter as specified in *Revised^7 Report on the Algorithmic Language Scheme* (abbreviated *R7RS-small*).
 
-Why Scheme? Scheme is an old langue and it's very well documented. It also has a very simple syntax, which let's you focus on the juicy parts of implementing a programming language, namely the semantics. Scheme also has a lot of interesting features to implement, such as: first-class functions, closures, continuations, garbage collection, lexical scoping, tail-call optimization, and hygenic macros that let you extend the language by a large margin. Scheme is compact while at the same time very extensible.
+Why Scheme? Scheme is an old langue and it's very well documented. It also has a very simple syntax, which lets you focus on the juicy parts of implementing a programming language, namely the semantics. Scheme also has a lot of interesting features to implement, such as: first-class functions, closures, continuations, garbage collection, lexical scoping, tail-call optimization, and hygenic macros that let you extend the language by a large margin. Scheme is compact while at the same time very extensible.
 
-Why a bytecode interpreter? I have written simple compilers that generate assembly code before, but never an interpreter. Writing a feature-rich compiler on your own is hard work and writing your own bytecode interpreter makes that work a little easier. I didn't want to make it too easy, however, so I chose a stack-based approach instead of using the heap, which is more in line with traditional Scheme implementations.
+Why a bytecode interpreter? I have written simple compilers that generate assembly code before, but never an interpreter. Writing a feature-rich compiler on your own is hard work and writing your own bytecode interpreter makes that work a little easier. I didn't want to make it too easy, however, so I chose a stack-based approach instead of putting everything on the heap, which is more in line with traditional Scheme implementations.
 
 Much of the work is owed to the book *Crafting Interpreters*, especially the implementation of closures (which uses upvalues like in Lua).
 
@@ -24,7 +24,7 @@ This is an ongoing project. For more information about what is has been done and
 * [x] Implement closures.
 * [x] Support for garbage collection.
 * [ ] Implement continuations.
-* [ ] Implement quotes and evaluation.
 * [ ] Support tail recursion.
+* [ ] Implement quotes and evaluation.
 * [ ] Hygenic macros.
 * [ ] `<void>`
