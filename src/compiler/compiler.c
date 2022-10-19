@@ -388,8 +388,17 @@ static void compiler_compile_named_variable(Token name, bool assign)
     }
     else if ((arg = compiler_resolve_global(current, &name)) != -1)
     {
-        get_op = OP_GET_GLOBAL;
-        set_op = OP_SET_GLOBAL;
+        if (assign)
+        {
+            compiler_emit_byte(OP_SET_GLOBAL);
+            compiler_emit_short((uint16_t)arg);
+        }
+        else
+        {
+            compiler_emit_byte(OP_GET_GLOBAL);
+            compiler_emit_short((uint16_t)arg);
+        }
+        return;
     }
     else
     {
@@ -621,7 +630,8 @@ static void compiler_define_variable(const int global)
         compiler_mark_initialized();
         return;
     }
-    compiler_emit_bytes(OP_SET_GLOBAL, (uint8_t)global);
+    compiler_emit_byte(OP_SET_GLOBAL);
+    compiler_emit_short((uint16_t)global);
 }
 
 static void compiler_compile_define(const SExpr *sexpr)

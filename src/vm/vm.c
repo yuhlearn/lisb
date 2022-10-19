@@ -63,7 +63,7 @@ static void vm_runtime_error(const char *format, ...)
     vm_reset_stack();
 }
 
-static void vm_define_native(const char *name, NativeFn function)
+static void vm_define_primitive(const char *name, NativeFn function)
 {
     vm_push(VALUE_OBJ_VAL(object_copy_string(name, (int)strlen(name))));
     vm_push(VALUE_OBJ_VAL(object_new_native(function)));
@@ -88,17 +88,17 @@ void vm_init_vm()
     table_init_table(&vm.globals);
     table_init_table(&vm.strings);
 
-    vm_define_native("clock", primitive_clock);
-    vm_define_native("+", primitive_add);
-    vm_define_native("-", primitive_sub);
-    vm_define_native("*", primitive_mup);
-    vm_define_native("/", primitive_div);
+    vm_define_primitive("clock", primitive_clock);
+    vm_define_primitive("+", primitive_add);
+    vm_define_primitive("-", primitive_sub);
+    vm_define_primitive("*", primitive_mup);
+    vm_define_primitive("/", primitive_div);
 
-    vm_define_native("=", primitive_num_eq);
-    vm_define_native("<", primitive_num_le);
-    vm_define_native(">", primitive_num_ge);
-    vm_define_native("<=", primitive_num_leq);
-    vm_define_native(">=", primitive_num_geq);
+    vm_define_primitive("=", primitive_num_eq);
+    vm_define_primitive("<", primitive_num_le);
+    vm_define_primitive(">", primitive_num_ge);
+    vm_define_primitive("<=", primitive_num_leq);
+    vm_define_primitive(">=", primitive_num_geq);
 }
 
 static bool vm_call(ObjClosure *closure, int arg_count)
@@ -264,7 +264,7 @@ static InterpretResult vm_run()
         }
         case OP_GET_GLOBAL:
         {
-            uint16_t slot = VM_READ_BYTE();
+            uint16_t slot = VM_READ_SHORT();
             vm_push(table_get(&vm.globals, slot));
             break;
         }
@@ -282,7 +282,7 @@ static InterpretResult vm_run()
         }
         case OP_SET_GLOBAL:
         {
-            uint16_t slot = VM_READ_BYTE();
+            uint16_t slot = VM_READ_SHORT();
             table_set(&vm.globals, slot, vm_peek(0));
             break;
         }

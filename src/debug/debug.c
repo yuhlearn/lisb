@@ -38,6 +38,14 @@ static int debug_byte_instruction(const char *name, Chunk *chunk, int offset)
     return offset + 2;
 }
 
+static int debug_short_instruction(const char *name, Chunk *chunk, int offset)
+{
+    uint16_t slot = (uint16_t)(chunk->code[offset + 1] << 8);
+    slot |= chunk->code[offset + 2];
+    printf("%-16s %4u\n", name, (unsigned)slot);
+    return offset + 3;
+}
+
 static int debug_jump_instruction(const char *name, int sign,
                                   Chunk *chunk, int offset)
 {
@@ -79,9 +87,9 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
     case OP_SET_LOCAL:
         return debug_byte_instruction("OP_SET_LOCAL", chunk, offset);
     case OP_GET_GLOBAL:
-        return debug_byte_instruction("OP_GET_GLOBAL", chunk, offset);
+        return debug_short_instruction("OP_GET_GLOBAL", chunk, offset);
     case OP_SET_GLOBAL:
-        return debug_byte_instruction("OP_SET_GLOBAL", chunk, offset);
+        return debug_short_instruction("OP_SET_GLOBAL", chunk, offset);
     case OP_GET_UPVALUE:
         return debug_byte_instruction("OP_GET_UPVALUE", chunk, offset);
     case OP_SET_UPVALUE:
