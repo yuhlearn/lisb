@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
+size_t next_id = 1;
+
 #define OBJECT_ALLOCATE_OBJ(type, objectType) \
     (type *)object_allocate_object(sizeof(type), objectType)
 
@@ -41,28 +43,35 @@ ObjClosure *object_new_closure(ObjFunction *function)
     return closure;
 }
 
-ObjFunction *object_new_function()
+ObjFunction *object_new_script()
 {
     ObjFunction *function = OBJECT_ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
     function->arity = 0;
     function->upvalue_count = 0;
-    function->name = NULL;
+    function->id = 0;
     chunk_init_chunk(&function->chunk);
     return function;
 }
 
-static ObjString *object_allocate_string(char *chars, int length, uint32_t hash)
+ObjFunction *object_new_function()
+{
+    ObjFunction *function = object_new_script();
+    function->id = next_id++;
+    return function;
+}
+
+static ObjString *object_allocate_string(char *chars, int length)
 {
     ObjString *string = OBJECT_ALLOCATE_OBJ(ObjString, OBJ_STRING);
 
     string->length = length;
     string->chars = chars;
-    string->hash = hash;
 
     // Push then pop the string to the constant table so it doesn't get
     // garbage collected before being interned
     vm_push(VALUE_OBJ_VAL(string));
-    table_set(&vm.strings, string, VALUE_NULL_VAL);
+    int slot = table_declare(&vm.strings, string);
+    table_set(&vm.strings, slot, VALUE_NULL_VAL);
     vm_pop();
 
     return string;
@@ -81,28 +90,26 @@ static uint32_t object_hash_string(const char *key, int length)
 
 ObjString *object_take_string(char *chars, int length)
 {
-    uint32_t hash = object_hash_string(chars, length);
-    ObjString *interned = table_find_string(&vm.strings, chars, length, hash);
+    ObjString *interned = table_find_string(&vm.strings, chars, length);
     if (interned != NULL)
     {
         MEMORY_FREE_ARRAY(char, chars, length + 1);
         return interned;
     }
 
-    return object_allocate_string(chars, length, hash);
+    return object_allocate_string(chars, length);
 }
 
 ObjString *object_copy_string(const char *chars, int length)
 {
-    uint32_t hash = object_hash_string(chars, length);
-    ObjString *interned = table_find_string(&vm.strings, chars, length, hash);
+    ObjString *interned = table_find_string(&vm.strings, chars, length);
     if (interned != NULL)
         return interned;
 
     char *heap_chars = MEMORY_ALLOCATE(char, length + 1);
     memcpy(heap_chars, chars, length);
     heap_chars[length] = '\0';
-    return object_allocate_string(heap_chars, length, hash);
+    return object_allocate_string(heap_chars, length);
 }
 
 ObjUpvalue *object_new_upvalue(Value *slot)
@@ -116,12 +123,7 @@ ObjUpvalue *object_new_upvalue(Value *slot)
 
 static void object_print_function(ObjFunction *function)
 {
-    if (function->name == NULL)
-    {
-        printf("<script>");
-        return;
-    }
-    printf("<fn %s>", function->name->chars);
+    printf("<fn %u>", (unsigned)function->id);
 }
 
 ObjNative *object_new_native(NativeFn function)

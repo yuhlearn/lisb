@@ -40,7 +40,7 @@ typedef struct
     int arity;
     int upvalue_count;
     Chunk chunk;
-    ObjString *name;
+    size_t id;
 } ObjFunction;
 
 typedef Value (*NativeFn)(int arcg_cout, Value *args);
@@ -76,6 +76,7 @@ typedef struct
 } ObjClosure;
 
 ObjClosure *object_new_closure(ObjFunction *function);
+ObjFunction *object_new_script();
 ObjFunction *object_new_function();
 ObjNative *object_new_native(NativeFn function);
 ObjString *object_take_string(char *chars, int length);

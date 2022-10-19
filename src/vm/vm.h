@@ -5,6 +5,7 @@
 #include <value/value.h>
 #include <table/table.h>
 #include <object/object.h>
+#include <common/common.h>
 
 #define VM_FRAMES_MAX 64
 #define VM_STACK_MAX (VM_FRAMES_MAX * UINT8_COUNT)
@@ -23,13 +24,16 @@ typedef struct
 
     Value stack[VM_STACK_MAX];
     Value *stack_top;
-    Table globals;
-    Table strings;
+
     ObjUpvalue *open_upvalues;
+
+    Table strings;
+    Table globals;
+
+    Obj *objects;
 
     size_t bytes_allocated;
     size_t next_gc;
-    Obj *objects;
 
     int gray_count;
     int gray_capacity;

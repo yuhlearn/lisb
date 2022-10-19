@@ -79,11 +79,9 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
     case OP_SET_LOCAL:
         return debug_byte_instruction("OP_SET_LOCAL", chunk, offset);
     case OP_GET_GLOBAL:
-        return debug_constant_instruction("OP_GET_GLOBAL", chunk, offset);
-    case OP_DEFINE_GLOBAL:
-        return debug_constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+        return debug_byte_instruction("OP_GET_GLOBAL", chunk, offset);
     case OP_SET_GLOBAL:
-        return debug_constant_instruction("OP_SET_GLOBAL", chunk, offset);
+        return debug_byte_instruction("OP_SET_GLOBAL", chunk, offset);
     case OP_GET_UPVALUE:
         return debug_byte_instruction("OP_GET_UPVALUE", chunk, offset);
     case OP_SET_UPVALUE:

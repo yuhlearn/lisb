@@ -106,7 +106,6 @@ static void memory_blacken_object(Obj *object)
     case OBJ_FUNCTION:
     {
         ObjFunction *function = (ObjFunction *)object;
-        memory_mark_object((Obj *)function->name);
         memory_mark_array(&function->chunk.constants);
         break;
     }

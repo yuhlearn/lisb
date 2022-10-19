@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 typedef struct
 {
@@ -53,7 +54,7 @@ Environment *current = NULL;
 Chunk *compiling_chunk;
 
 static void compiler_compile_expression(const SExpr *sexpr);
-static void compiler_define_variable(uint8_t global);
+static void compiler_define_variable(const int global);
 static void compiler_compile_define(const SExpr *sexpr);
 
 static Chunk *compiler_current_chunk()
@@ -101,6 +102,12 @@ static void compiler_emit_bytes(uint8_t byte1, uint8_t byte2)
 {
     compiler_emit_byte(byte1);
     compiler_emit_byte(byte2);
+}
+
+static void compiler_emit_short(uint16_t bytes)
+{
+    compiler_emit_byte((bytes >> 8) & 0xff);
+    compiler_emit_byte(bytes & 0xff);
 }
 
 static int compiler_emit_jump(uint8_t instruction)
@@ -160,6 +167,20 @@ static bool compiler_identifiers_equal(Token *a, Token *b)
     if (a->length != b->length)
         return false;
     return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static void compiler_add_local(Token name)
+{
+    if (current->local_count == UINT8_COUNT)
+    {
+        compiler_failed_at(&name, "Too many local variables in function.");
+        return;
+    }
+
+    Local *local = &current->locals[current->local_count++];
+    local->name = name;
+    local->depth = -1;
+    local->is_captured = false;
 }
 
 static int compiler_resolve_local(Environment *env, Token *name)
@@ -226,21 +247,7 @@ static int compiler_resolve_upvalue(Environment *env, Token *name)
     return -1;
 }
 
-static void compiler_add_local(Token name)
-{
-    if (current->local_count == UINT8_COUNT)
-    {
-        compiler_failed_at(&name, "Too many local variables in function.");
-        return;
-    }
-
-    Local *local = &current->locals[current->local_count++];
-    local->name = name;
-    local->depth = -1;
-    local->is_captured = false;
-}
-
-static void compiler_declare_variable(Token name)
+static int compiler_declare_variable(Token name)
 {
     for (int i = current->local_count - 1; i >= 0; i--)
     {
@@ -257,9 +264,13 @@ static void compiler_declare_variable(Token name)
     }
 
     if (current->scope_depth == 0)
-        return;
+    {
+        return table_declare(&vm.globals, object_copy_string(name.start, name.length));
+    }
 
     compiler_add_local(name);
+
+    return -1;
 }
 
 static void compiler_begin_scope()
@@ -295,13 +306,10 @@ static void compiler_init_environment(Environment *env, FunctionType type)
     env->type = type;
     env->local_count = 0;
     env->scope_depth = 0;
-    env->function = object_new_function();
+    env->function = (type == TYPE_SCRIPT)
+                        ? object_new_script()
+                        : object_new_function();
     current = env;
-
-    if (type != TYPE_SCRIPT)
-    {
-        current->function->name = object_copy_string("lambda", 6);
-    }
 
     Local *local = &current->locals[current->local_count++];
     local->depth = 0;
@@ -318,9 +326,9 @@ static ObjFunction *compiler_end_environment()
 #ifdef DEBUG_PRINT_CODE
     if (!compiler.failed)
     {
-        debug_disassemble_chunk(compiler_current_chunk(),
-                                current->type == TYPE_FUNCTION ? "<function>"
-                                                               : "<script>");
+        char name[32] = {0};
+        sprintf(name, "<fn %u>", (unsigned)current->function->id);
+        debug_disassemble_chunk(compiler_current_chunk(), name);
     }
 #endif
 
@@ -350,22 +358,17 @@ static void compiler_compile_number(const SExpr *sexpr)
     compiler_emit_constant(VALUE_NUMBER_VAL(value));
 }
 
-static uint8_t compiler_compile_variable(Token name)
-{
-    compiler_declare_variable(name);
-
-    if (current->scope_depth > 0)
-        return 0;
-
-    return compiler_identifier_constant(&name);
-}
-
 static void compiler_mark_initialized()
 {
     if (current->scope_depth == 0)
         return;
     current->locals[current->local_count - 1].depth =
         current->scope_depth;
+}
+
+static int compiler_resolve_global(Environment *current, Token *name)
+{
+    return table_find_entry(&vm.globals, name->start, name->length);
 }
 
 static void compiler_compile_named_variable(Token name, bool assign)
@@ -383,11 +386,14 @@ static void compiler_compile_named_variable(Token name, bool assign)
         get_op = OP_GET_UPVALUE;
         set_op = OP_SET_UPVALUE;
     }
-    else
+    else if ((arg = compiler_resolve_global(current, &name)) != -1)
     {
-        arg = compiler_identifier_constant(&name);
         get_op = OP_GET_GLOBAL;
         set_op = OP_SET_GLOBAL;
+    }
+    else
+    {
+        compiler_failed_at(&name, "Undefined variable.");
     }
 
     if (assign)
@@ -451,9 +457,10 @@ static void compiler_compile_lambda_expression(const SExpr *sexpr)
         current->function->arity++;
         if (current->function->arity > 255)
         {
-            compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(formal)), "Can't have more than 255 parameters.");
+            compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(formal)),
+                               "Can't have more than 255 parameters.");
         }
-        uint8_t var = compiler_compile_variable(PARSER_AS_ATOM(PARSER_CAR(formal)));
+        int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CAR(formal)));
         compiler_define_variable(var);
     }
 
@@ -497,7 +504,7 @@ static void compiler_compile_let_expression(const SExpr *sexpr)
 
     for (SExpr *bind = PARSER_CDAR(sexpr); !PARSER_IS_NULL(bind); bind = PARSER_CDR(bind))
     {
-        uint8_t var = compiler_compile_variable(PARSER_AS_ATOM(PARSER_CAAR(bind)));
+        int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CAAR(bind)));
         compiler_compile_expression(PARSER_CADAR(bind));
         compiler_define_variable(var);
     }
@@ -607,19 +614,19 @@ static void compiler_compile_expression(const SExpr *sexpr)
     }
 }
 
-static void compiler_define_variable(uint8_t global)
+static void compiler_define_variable(const int global)
 {
     if (current->scope_depth > 0)
     {
         compiler_mark_initialized();
         return;
     }
-    compiler_emit_bytes(OP_DEFINE_GLOBAL, global);
+    compiler_emit_bytes(OP_SET_GLOBAL, (uint8_t)global);
 }
 
 static void compiler_compile_define(const SExpr *sexpr)
 {
-    uint8_t var = compiler_compile_variable(PARSER_AS_ATOM(PARSER_CDAR(sexpr)));
+    int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CDAR(sexpr)));
     compiler_compile_expression(PARSER_CDDAR(sexpr));
     compiler_define_variable(var);
 }
@@ -636,8 +643,6 @@ static void compiler_compile_definition(const SExpr *sexpr)
 
 static void compiler_compile_form(const SExpr *sexpr)
 {
-    SExprType sexpr_type = PARSER_TYPE(sexpr);
-
     if (compiler_is_definition(sexpr))
     {
         compiler_compile_definition(sexpr);
@@ -645,7 +650,6 @@ static void compiler_compile_form(const SExpr *sexpr)
     else
     {
         compiler_compile_expression(sexpr);
-        // compiler_emit_byte(OP_POP);
     }
 }
 

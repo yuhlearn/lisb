@@ -57,15 +57,7 @@ static void vm_runtime_error(const char *format, ...)
         ObjFunction *function = frame->closure->function;
         size_t instruction = frame->ip - function->chunk.code - 1;
         fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
-
-        if (function->name == NULL)
-        {
-            fprintf(stderr, "script\n");
-        }
-        else
-        {
-            fprintf(stderr, "%s()\n", function->name->chars);
-        }
+        printf("<fn %u>\n", (unsigned)function->id);
     }
 
     vm_reset_stack();
@@ -75,7 +67,8 @@ static void vm_define_native(const char *name, NativeFn function)
 {
     vm_push(VALUE_OBJ_VAL(object_copy_string(name, (int)strlen(name))));
     vm_push(VALUE_OBJ_VAL(object_new_native(function)));
-    table_set(&vm.globals, OBJECT_AS_STRING(vm.stack[0]), vm.stack[1]);
+    int slot = table_declare(&vm.globals, OBJECT_AS_STRING(vm.stack[0]));
+    table_set(&vm.globals, slot, vm.stack[1]);
     vm_pop();
     vm_pop();
 }
@@ -227,7 +220,6 @@ static InterpretResult vm_run()
 #define VM_READ_CONSTANT() (frame->closure->function->chunk.constants.values[VM_READ_BYTE()])
 #define VM_READ_SHORT() (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define VM_READ_STRING() OBJECT_AS_STRING(VM_READ_CONSTANT())
-
     for (;;)
     {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -272,22 +264,8 @@ static InterpretResult vm_run()
         }
         case OP_GET_GLOBAL:
         {
-            ObjString *name = VM_READ_STRING();
-            Value value;
-            if (!table_get(&vm.globals, name, &value))
-            {
-                vm_runtime_error("Undefined variable '%s'.", name->chars);
-                return VM_RUNTIME_ERROR;
-            }
-            vm_push(value);
-            break;
-        }
-        case OP_DEFINE_GLOBAL:
-        {
-            ObjString *name = VM_READ_STRING();
-            table_set(&vm.globals, name, vm_peek(0));
-            vm_pop();
-            vm_push(VALUE_VOID_VAL);
+            uint16_t slot = VM_READ_BYTE();
+            vm_push(table_get(&vm.globals, slot));
             break;
         }
         case OP_GET_UPVALUE:
@@ -299,20 +277,13 @@ static InterpretResult vm_run()
         case OP_SET_LOCAL:
         {
             uint8_t slot = VM_READ_BYTE();
-            frame->slots[slot] = vm_pop(0);
-            vm_push(VALUE_VOID_VAL);
+            frame->slots[slot] = vm_peek(0);
             break;
         }
         case OP_SET_GLOBAL:
         {
-            ObjString *name = VM_READ_STRING();
-            if (table_set(&vm.globals, name, vm_pop()))
-            {
-                table_delete(&vm.globals, name);
-                vm_runtime_error("Undefined variable '%s'.", name->chars);
-                return VM_RUNTIME_ERROR;
-            }
-            vm_push(VALUE_VOID_VAL);
+            uint16_t slot = VM_READ_BYTE();
+            table_set(&vm.globals, slot, vm_peek(0));
             break;
         }
         case OP_SET_UPVALUE:
