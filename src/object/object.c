@@ -144,7 +144,7 @@ void object_print_object(Value value)
         object_print_function(OBJECT_AS_FUNCTION(value));
         break;
     case OBJ_NATIVE:
-        printf("<native fn>");
+        printf("<fn prim>");
         break;
     case OBJ_STRING:
         printf("%s", OBJECT_AS_CSTRING(value));

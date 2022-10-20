@@ -93,7 +93,6 @@ void vm_init_vm()
     vm_define_primitive("-", primitive_sub);
     vm_define_primitive("*", primitive_mup);
     vm_define_primitive("/", primitive_div);
-
     vm_define_primitive("=", primitive_num_eq);
     vm_define_primitive("<", primitive_num_le);
     vm_define_primitive(">", primitive_num_ge);

@@ -153,7 +153,6 @@ void debug_print_sexpression(SExpr *sexpr)
         printf(") ");
         break;
     }
-    return;
 }
 
 void debug_disassemble_sexpression(SExpr *sexpr)
