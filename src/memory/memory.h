@@ -18,6 +18,19 @@
 #define MEMORY_FREE_ARRAY(type, pointer, oldCount) \
     memory_reallocate(pointer, sizeof(type) * (oldCount), 0)
 
+typedef struct
+{
+    Obj *objects;
+    Obj **gray_stack;
+    int gray_count;
+    int gray_capacity;
+    size_t bytes_allocated;
+    size_t next_gc;
+} Memory;
+
+extern Memory memory;
+
+void memory_init_memory();
 void *memory_reallocate(void *pointer, size_t oldSize, size_t newSize);
 void memory_mark_object(Obj *object);
 void memory_mark_value(Value value);

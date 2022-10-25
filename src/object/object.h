@@ -78,7 +78,14 @@ typedef struct
     int upvalue_count;
 } ObjClosure;
 
+typedef struct
+{
+    Obj obj;
+    struct VM *vm;
+} ObjContinuation;
+
 ObjClosure *object_new_closure(ObjFunction *function);
+ObjContinuation *object_new_continuation(struct VM *vm);
 ObjFunction *object_new_script();
 ObjFunction *object_new_function();
 ObjNative *object_new_native(NativeFn function);

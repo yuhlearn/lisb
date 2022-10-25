@@ -239,6 +239,7 @@ static int compiler_resolve_upvalue(Environment *env, Token *name)
     }
 
     int upvalue = compiler_resolve_upvalue(env->enclosing, name);
+
     if (upvalue != -1)
     {
         return compiler_add_upvalue(env, (uint8_t)upvalue, false);
@@ -327,7 +328,7 @@ static ObjFunction *compiler_end_environment()
     if (!compiler.failed)
     {
         char name[32] = {0};
-        sprintf(name, "<fn %u>", (unsigned)current->function->id);
+        sprintf(name, "#<procedure %u>", (unsigned)current->function->id);
         debug_disassemble_chunk(compiler_current_chunk(), name);
     }
 #endif
@@ -511,6 +512,9 @@ static void compiler_compile_let_expression(const SExpr *sexpr)
 
     compiler_begin_scope();
 
+    // Make space for return value at index 0
+    current->local_count++;
+
     for (SExpr *bind = PARSER_CDAR(sexpr); !PARSER_IS_NULL(bind); bind = PARSER_CDR(bind))
     {
         int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CAAR(bind)));
@@ -529,6 +533,10 @@ static void compiler_compile_let_expression(const SExpr *sexpr)
         if (!PARSER_IS_NULL(PARSER_CDR(expr)))
             compiler_emit_byte(OP_POP);
     }
+
+    // Set the return value at index
+    compiler_emit_bytes(OP_SET_LOCAL, 0);
+    compiler_emit_byte(OP_POP);
 
     compiler_end_scope();
 }
@@ -565,6 +573,21 @@ static void compiler_compile_if_expression(const SExpr *sexpr)
     compiler_compile_expression(else_expr);
 
     compiler_patch_jump(else_jump);
+}
+
+static void compiler_compile_call_cc_expression(const SExpr *sexpr)
+{
+    SExpr *expr = PARSER_CDAR(sexpr);
+    uint8_t arg_count = 1;
+
+    // Push the argument function first
+    compiler_compile_expression(expr);
+
+    // Create and push the current continuation
+    compiler_emit_byte(OP_CONTINUATION);
+
+    // Call argument function with continuation as argument
+    compiler_emit_bytes(OP_CALL, arg_count);
 }
 
 static void compiler_compile_application_expression(const SExpr *sexpr)
@@ -604,6 +627,9 @@ static void compiler_compile_compound_expression(const SExpr *sexpr)
         break;
     case TOKEN_IF:
         compiler_compile_if_expression(sexpr);
+        break;
+    case TOKEN_CALL_CC:
+        compiler_compile_call_cc_expression(sexpr);
         break;
     default:
         compiler_compile_application_expression(sexpr);
@@ -677,9 +703,9 @@ ObjFunction *compiler_compile(const char *source)
     if (result == PARSER_OK)
     {
 #ifdef DEBUG_PRINT_CODE
-        printf("s-expr: ");
+        printf("\ns-expr: ");
         debug_disassemble_sexpression(sexpr);
-        printf("\n");
+        printf("\n\n");
 #endif
         compiler_compile_form(sexpr);
         ObjFunction *function = compiler_end_environment();

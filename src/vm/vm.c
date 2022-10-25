@@ -42,7 +42,7 @@ static Value vm_peek(int distance)
     return vm.stack_top[-1 - distance];
 }
 
-static void vm_runtime_error(const char *format, ...)
+void vm_runtime_error(const char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -53,11 +53,12 @@ static void vm_runtime_error(const char *format, ...)
     // Print the stack trace
     for (int i = vm.frame_count - 1; i >= 0; i--)
     {
-        CallFrame *frame = &vm.frames[i];
+        CallFrame *frame = &vm.call_frames[i];
         ObjFunction *function = frame->closure->function;
         size_t instruction = frame->ip - function->chunk.code - 1;
+
         fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
-        printf("<fn %u>\n", (unsigned)function->id);
+        printf("#<procedure %u>\n", (unsigned)function->id);
     }
 
     vm_reset_stack();
@@ -76,23 +77,28 @@ static void vm_define_primitive(const char *name, NativeFn function)
 void vm_init_vm()
 {
     vm_reset_stack();
-    vm.objects = NULL;
+    memory_init_memory();
+    // vm.objects = NULL;
 
-    vm.bytes_allocated = 0;
-    vm.next_gc = 1024 * 1024;
+    // vm.bytes_allocated = 0;
+    // vm.next_gc = 1024 * 1024;
 
-    vm.gray_count = 0;
-    vm.gray_capacity = 0;
-    vm.gray_stack = NULL;
+    // vm.gray_count = 0;
+    // vm.gray_capacity = 0;
+    //  vm.gray_stack = NULL;
 
     table_init_table(&vm.globals);
     table_init_table(&vm.strings);
 
     vm_define_primitive("clock", primitive_clock);
+    vm_define_primitive("display", primitive_display);
+    vm_define_primitive("displayln", primitive_displayln);
+
     vm_define_primitive("+", primitive_add);
     vm_define_primitive("-", primitive_sub);
     vm_define_primitive("*", primitive_mup);
     vm_define_primitive("/", primitive_div);
+
     vm_define_primitive("=", primitive_num_eq);
     vm_define_primitive("<", primitive_num_le);
     vm_define_primitive(">", primitive_num_ge);
@@ -115,7 +121,7 @@ static bool vm_call(ObjClosure *closure, int arg_count)
         return false;
     }
 
-    CallFrame *frame = &vm.frames[vm.frame_count++];
+    CallFrame *frame = &vm.call_frames[vm.frame_count++];
 
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
@@ -131,13 +137,35 @@ static bool vm_call_value(Value callee, int arg_count)
         switch (OBJECT_OBJ_TYPE(callee))
         {
         case OBJ_CLOSURE:
+        {
             return vm_call(OBJECT_AS_CLOSURE(callee), arg_count);
+        }
         case OBJ_NATIVE:
         {
             NativeFn native = OBJECT_AS_NATIVE(callee);
             Value result = native(arg_count, vm.stack_top - arg_count);
             vm.stack_top -= arg_count + 1;
             vm_push(result);
+            return true;
+        }
+        case OBJ_CONTINUATION:
+        {
+            if (arg_count != 1)
+            {
+                vm_runtime_error("Expected %d arguments but got %d.",
+                                 1, arg_count);
+                return false;
+            }
+
+            ObjContinuation *cont = OBJECT_AS_CONTINUATION(callee);
+            Value result = vm_pop();
+
+            vm = *(VM *)cont->vm;
+            vm.call_frames[vm.frame_count - 1].ip += 2; // Skip the call/cc call
+
+            vm_pop();        // The inital procedure
+            vm_push(result); // The new return value
+
             return true;
         }
         default:
@@ -213,7 +241,7 @@ static void vm_concatenate()
 
 static InterpretResult vm_run()
 {
-    CallFrame *frame = &vm.frames[vm.frame_count - 1];
+    CallFrame *frame = &vm.call_frames[vm.frame_count - 1];
 
 #define VM_READ_BYTE() (*frame->ip++)
 #define VM_READ_CONSTANT() (frame->closure->function->chunk.constants.values[VM_READ_BYTE()])
@@ -235,6 +263,7 @@ static InterpretResult vm_run()
                                       (int)(frame->ip - frame->closure->function->chunk.code));
 #endif
         uint8_t instruction;
+
         switch (instruction = VM_READ_BYTE())
         {
         case OP_CONSTANT:
@@ -244,17 +273,25 @@ static InterpretResult vm_run()
             break;
         }
         case OP_NULL:
+        {
             vm_push(VALUE_NULL_VAL);
             break;
+        }
         case OP_TRUE:
+        {
             vm_push(VALUE_BOOL_VAL(true));
             break;
+        }
         case OP_FALSE:
+        {
             vm_push(VALUE_BOOL_VAL(false));
             break;
+        }
         case OP_POP:
+        {
             vm_pop();
             break;
+        }
         case OP_GET_LOCAL:
         {
             uint8_t slot = VM_READ_BYTE();
@@ -307,11 +344,13 @@ static InterpretResult vm_run()
         case OP_CALL:
         {
             int arg_count = VM_READ_BYTE();
+
             if (!vm_call_value(vm_peek(arg_count), arg_count))
             {
                 return VM_RUNTIME_ERROR;
             }
-            frame = &vm.frames[vm.frame_count - 1];
+
+            frame = &vm.call_frames[vm.frame_count - 1];
             break;
         }
         case OP_CLOSURE:
@@ -324,10 +363,10 @@ static InterpretResult vm_run()
             {
                 uint8_t is_local = VM_READ_BYTE();
                 uint8_t index = VM_READ_BYTE();
+
                 if (is_local)
                 {
-                    closure->upvalues[i] =
-                        vm_capture_upvalue(frame->slots + index);
+                    closure->upvalues[i] = vm_capture_upvalue(frame->slots + index);
                 }
                 else
                 {
@@ -336,15 +375,24 @@ static InterpretResult vm_run()
             }
             break;
         }
+        case OP_CONTINUATION:
+        {
+            ObjContinuation *cont = object_new_continuation((struct VM *)&vm);
+            vm_push(VALUE_OBJ_VAL(cont));
+            break;
+        }
         case OP_CLOSE_UPVALUE:
+        {
             vm_close_upvalues(vm.stack_top - 1);
             vm_pop();
             break;
+        }
         case OP_RETURN:
         {
             Value result = vm_pop();
             vm_close_upvalues(frame->slots);
             vm.frame_count--;
+
             if (vm.frame_count == 0)
             {
                 vm_pop();
@@ -355,7 +403,7 @@ static InterpretResult vm_run()
 
             vm.stack_top = frame->slots;
             vm_push(result);
-            frame = &vm.frames[vm.frame_count - 1];
+            frame = &vm.call_frames[vm.frame_count - 1];
             break;
         }
         }

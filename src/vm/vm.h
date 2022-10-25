@@ -19,7 +19,7 @@ typedef struct
 
 typedef struct
 {
-    CallFrame frames[VM_FRAMES_MAX];
+    CallFrame call_frames[VM_FRAMES_MAX];
     int frame_count;
 
     Value stack[VM_STACK_MAX];
@@ -29,15 +29,6 @@ typedef struct
 
     Table strings;
     Table globals;
-
-    Obj *objects;
-
-    size_t bytes_allocated;
-    size_t next_gc;
-
-    int gray_count;
-    int gray_capacity;
-    Obj **gray_stack;
 } VM;
 
 typedef enum
@@ -55,5 +46,6 @@ InterpretResult vm_interpret(const char *source);
 
 Value vm_pop();
 void vm_push(Value value);
+void vm_runtime_error(const char *format, ...);
 
 #endif

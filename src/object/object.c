@@ -1,11 +1,12 @@
 #include <object/object.h>
 #include <memory/memory.h>
 #include <value/value.h>
-#include <vm/vm.h>
 #include <table/table.h>
+#include <vm/vm.h>
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 size_t next_id = 1;
 
@@ -17,8 +18,8 @@ static Obj *object_allocate_object(size_t size, ObjType type)
     Obj *object = (Obj *)memory_reallocate(NULL, 0, size);
     object->type = type;
     object->is_marked = false;
-    object->next = vm.objects;
-    vm.objects = object;
+    object->next = memory.objects;
+    memory.objects = object;
 
 #ifdef DEBUG_LOG_GC
     printf("%p allocate %zu for %d\n", (void *)object, size, type);
@@ -29,8 +30,8 @@ static Obj *object_allocate_object(size_t size, ObjType type)
 
 ObjClosure *object_new_closure(ObjFunction *function)
 {
-    ObjUpvalue **upvalues = MEMORY_ALLOCATE(ObjUpvalue *,
-                                            function->upvalue_count);
+    ObjUpvalue **upvalues = MEMORY_ALLOCATE(ObjUpvalue *, function->upvalue_count);
+
     for (int i = 0; i < function->upvalue_count; i++)
     {
         upvalues[i] = NULL;
@@ -40,7 +41,24 @@ ObjClosure *object_new_closure(ObjFunction *function)
     closure->function = function;
     closure->upvalues = upvalues;
     closure->upvalue_count = function->upvalue_count;
+
     return closure;
+}
+
+ObjContinuation *object_new_continuation(struct VM *vm)
+{
+    VM *vm_copy = (struct VM *)MEMORY_ALLOCATE(VM, 1);
+    if (vm_copy == NULL)
+    {
+        printf("Failed to allocate memory for continuation.");
+        exit(1);
+    }
+    memcpy(vm_copy, vm, sizeof(VM));
+
+    ObjContinuation *cont = OBJECT_ALLOCATE_OBJ(ObjContinuation, OBJ_CONTINUATION);
+    cont->vm = vm_copy;
+
+    return cont;
 }
 
 ObjFunction *object_new_script()
@@ -123,7 +141,7 @@ ObjUpvalue *object_new_upvalue(Value *slot)
 
 static void object_print_function(ObjFunction *function)
 {
-    printf("<fn %u>", (unsigned)function->id);
+    printf("#<procedure %u>", (unsigned)function->id);
 }
 
 ObjNative *object_new_native(NativeFn function)
@@ -143,8 +161,11 @@ void object_print_object(Value value)
     case OBJ_FUNCTION:
         object_print_function(OBJECT_AS_FUNCTION(value));
         break;
+    case OBJ_CONTINUATION:
+        printf("#<continuation>");
+        break;
     case OBJ_NATIVE:
-        printf("<fn prim>");
+        printf("#<primitive>");
         break;
     case OBJ_STRING:
         printf("%s", OBJECT_AS_CSTRING(value));

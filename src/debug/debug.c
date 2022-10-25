@@ -13,6 +13,8 @@ void debug_disassemble_chunk(Chunk *chunk, const char *name)
     {
         offset = debug_disassemble_instruction(chunk, offset);
     }
+
+    printf("\n");
 }
 
 static int debug_constant_instruction(const char *name, Chunk *chunk,
@@ -120,6 +122,8 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
 
         return offset;
     }
+    case OP_CONTINUATION:
+        return debug_simple_instruction("OP_CONTINUATION", offset);
     case OP_CLOSE_UPVALUE:
         return debug_simple_instruction("OP_CLOSE_UPVALUE", offset);
     case OP_RETURN:
