@@ -7,20 +7,23 @@
 
 #define OBJECT_OBJ_TYPE(value) (VALUE_AS_OBJ(value)->type)
 
-#define OBJECT_IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
+#define OBJECT_IS_CLOSURE(value) object_is_obj_type(value, OBJ_CLOSURE)
 #define OBJECT_IS_FUNCTION(value) object_is_obj_type(value, OBJ_FUNCTION)
 #define OBJECT_IS_NATIVE(value) object_is_obj_type(value, OBJ_NATIVE)
+#define OBJECT_IS_CONTINUATION(value) object_is_obj_type(value, OBJ_CONTINUATION)
 #define OBJECT_IS_STRING(value) object_is_obj_type(value, OBJ_STRING)
 
 #define OBJECT_AS_CLOSURE(value) ((ObjClosure *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_FUNCTION(value) ((ObjFunction *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_NATIVE(value) (((ObjNative *)VALUE_AS_OBJ(value))->function)
+#define OBJECT_AS_CONTINUATION(value) ((ObjContinuation *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_STRING(value) ((ObjString *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_CSTRING(value) (((ObjString *)VALUE_AS_OBJ(value))->chars)
 
 typedef enum
 {
     OBJ_CLOSURE,
+    OBJ_CONTINUATION,
     OBJ_FUNCTION,
     OBJ_NATIVE,
     OBJ_STRING,
@@ -40,7 +43,7 @@ typedef struct
     int arity;
     int upvalue_count;
     Chunk chunk;
-    ObjString *name;
+    size_t id;
 } ObjFunction;
 
 typedef Value (*NativeFn)(int arcg_cout, Value *args);
@@ -75,12 +78,20 @@ typedef struct
     int upvalue_count;
 } ObjClosure;
 
+// Forward declaration to avoid circular dependancies
+typedef struct ObjContinuation ObjContinuation;
+
 ObjClosure *object_new_closure(ObjFunction *function);
+ObjContinuation *object_new_continuation();
+ObjFunction *object_new_script();
 ObjFunction *object_new_function();
 ObjNative *object_new_native(NativeFn function);
 ObjString *object_take_string(char *chars, int length);
 ObjString *object_copy_string(const char *chars, int length);
 ObjUpvalue *object_new_upvalue(Value *slot);
+void object_load_continuation(ObjContinuation *cont);
+void object_mark_continuation(ObjContinuation *cont);
+void object_free_continuation(ObjContinuation *cont);
 void object_print_object(Value value);
 
 static inline bool object_is_obj_type(Value value, ObjType type)

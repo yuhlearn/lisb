@@ -5,6 +5,7 @@
 #include <value/value.h>
 #include <table/table.h>
 #include <object/object.h>
+#include <common/common.h>
 
 #define VM_FRAMES_MAX 64
 #define VM_STACK_MAX (VM_FRAMES_MAX * UINT8_COUNT)
@@ -18,22 +19,27 @@ typedef struct
 
 typedef struct
 {
-    CallFrame frames[VM_FRAMES_MAX];
+    CallFrame call_frames[VM_FRAMES_MAX];
     int frame_count;
 
     Value stack[VM_STACK_MAX];
     Value *stack_top;
-    Table globals;
-    Table strings;
+
+    ObjUpvalue *open_upvalues;
+} State;
+
+typedef struct
+{
+    CallFrame call_frames[VM_FRAMES_MAX];
+    int frame_count;
+
+    Value stack[VM_STACK_MAX];
+    Value *stack_top;
+
     ObjUpvalue *open_upvalues;
 
-    size_t bytes_allocated;
-    size_t next_gc;
-    Obj *objects;
-
-    int gray_count;
-    int gray_capacity;
-    Obj **gray_stack;
+    Table strings;
+    Table globals;
 } VM;
 
 typedef enum
@@ -51,5 +57,6 @@ InterpretResult vm_interpret(const char *source);
 
 Value vm_pop();
 void vm_push(Value value);
+void vm_runtime_error(const char *format, ...);
 
 #endif

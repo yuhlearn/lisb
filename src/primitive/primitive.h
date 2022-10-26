@@ -4,6 +4,8 @@
 #include <value/value.h>
 
 Value primitive_clock(int arg_count, Value *args);
+Value primitive_display(int arg_count, Value *args);
+Value primitive_displayln(int arg_count, Value *args);
 
 Value primitive_add(int arg_count, Value *args);
 Value primitive_sub(int arg_count, Value *args);

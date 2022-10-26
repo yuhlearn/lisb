@@ -7,9 +7,8 @@
 
 typedef struct
 {
-    int capacity;
     int count;
-    SExpr *sexprs;
+    SExpr sexprs[512];
 } SexprArray;
 
 typedef struct
@@ -99,15 +98,6 @@ static bool parser_is_definition()
 
 static SExpr *parser_write_sexpr_array(SExpr value)
 {
-    if (parser.sexpr_array.capacity < parser.sexpr_array.count + 1)
-    {
-        int old_capacity = parser.sexpr_array.capacity;
-        parser.sexpr_array.capacity = MEMORY_GROW_CAPACITY(old_capacity);
-        parser.sexpr_array.sexprs = MEMORY_GROW_ARRAY(SExpr,
-                                                      parser.sexpr_array.sexprs,
-                                                      old_capacity,
-                                                      parser.sexpr_array.capacity);
-    }
     parser.sexpr_array.sexprs[parser.sexpr_array.count] = value;
     SExpr *sexpr = parser.sexpr_array.sexprs + parser.sexpr_array.count;
     parser.sexpr_array.count++;
@@ -700,14 +690,6 @@ void parser_init_parser(const char *source)
     // Load the "this" and "lookahead" tokens
     parser_advance();
     parser_advance();
-}
-
-void parser_free_sexpr()
-{
-    MEMORY_FREE_ARRAY(SExpr, parser.sexpr_array.sexprs, 0);
-    parser.sexpr_array.capacity = 0;
-    parser.sexpr_array.count = 0;
-    parser.sexpr_array.sexprs = NULL;
 }
 
 ParseResult parser_parse(SExpr **sexpr)

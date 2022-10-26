@@ -13,6 +13,8 @@ void debug_disassemble_chunk(Chunk *chunk, const char *name)
     {
         offset = debug_disassemble_instruction(chunk, offset);
     }
+
+    printf("\n");
 }
 
 static int debug_constant_instruction(const char *name, Chunk *chunk,
@@ -36,6 +38,14 @@ static int debug_byte_instruction(const char *name, Chunk *chunk, int offset)
     uint8_t slot = chunk->code[offset + 1];
     printf("%-16s %4d\n", name, slot);
     return offset + 2;
+}
+
+static int debug_short_instruction(const char *name, Chunk *chunk, int offset)
+{
+    uint16_t slot = (uint16_t)(chunk->code[offset + 1] << 8);
+    slot |= chunk->code[offset + 2];
+    printf("%-16s %4u\n", name, (unsigned)slot);
+    return offset + 3;
 }
 
 static int debug_jump_instruction(const char *name, int sign,
@@ -79,11 +89,9 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
     case OP_SET_LOCAL:
         return debug_byte_instruction("OP_SET_LOCAL", chunk, offset);
     case OP_GET_GLOBAL:
-        return debug_constant_instruction("OP_GET_GLOBAL", chunk, offset);
-    case OP_DEFINE_GLOBAL:
-        return debug_constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+        return debug_short_instruction("OP_GET_GLOBAL", chunk, offset);
     case OP_SET_GLOBAL:
-        return debug_constant_instruction("OP_SET_GLOBAL", chunk, offset);
+        return debug_short_instruction("OP_SET_GLOBAL", chunk, offset);
     case OP_GET_UPVALUE:
         return debug_byte_instruction("OP_GET_UPVALUE", chunk, offset);
     case OP_SET_UPVALUE:
@@ -114,6 +122,8 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
 
         return offset;
     }
+    case OP_CONTINUATION:
+        return debug_simple_instruction("OP_CONTINUATION", offset);
     case OP_CLOSE_UPVALUE:
         return debug_simple_instruction("OP_CLOSE_UPVALUE", offset);
     case OP_RETURN:
@@ -147,7 +157,6 @@ void debug_print_sexpression(SExpr *sexpr)
         printf(") ");
         break;
     }
-    return;
 }
 
 void debug_disassemble_sexpression(SExpr *sexpr)
