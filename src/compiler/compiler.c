@@ -512,8 +512,8 @@ static void compiler_compile_let_expression(const SExpr *sexpr)
 
     compiler_begin_scope();
 
-    // Make space for return value at index 0
-    current->local_count++;
+    // Save index for return value
+    int result = current->local_count;
 
     for (SExpr *bind = PARSER_CDAR(sexpr); !PARSER_IS_NULL(bind); bind = PARSER_CDR(bind))
     {
@@ -534,9 +534,8 @@ static void compiler_compile_let_expression(const SExpr *sexpr)
             compiler_emit_byte(OP_POP);
     }
 
-    // Set the return value at index
-    compiler_emit_bytes(OP_SET_LOCAL, 0);
-    compiler_emit_byte(OP_POP);
+    // Set the return value at return index
+    compiler_emit_bytes(OP_SET_LOCAL, result);
 
     compiler_end_scope();
 }
