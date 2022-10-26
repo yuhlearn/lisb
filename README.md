@@ -23,7 +23,7 @@ This is an ongoing project. For more information about what is has been done and
 * [x] Support for primitive functions.
 * [x] Implement closures.
 * [x] Support for garbage collection.
-* [ ] Implement continuations.
+* [x] Implement continuations.
 * [ ] Support tail recursion.
 * [ ] Implement quotes and evaluation.
 * [ ] Hygenic macros.
