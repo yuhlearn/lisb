@@ -78,20 +78,20 @@ typedef struct
     int upvalue_count;
 } ObjClosure;
 
-typedef struct
-{
-    Obj obj;
-    struct VM *vm;
-} ObjContinuation;
+// Forward declaration to avoid circular dependancies
+typedef struct ObjContinuation ObjContinuation;
 
 ObjClosure *object_new_closure(ObjFunction *function);
-ObjContinuation *object_new_continuation(struct VM *vm);
+ObjContinuation *object_new_continuation();
 ObjFunction *object_new_script();
 ObjFunction *object_new_function();
 ObjNative *object_new_native(NativeFn function);
 ObjString *object_take_string(char *chars, int length);
 ObjString *object_copy_string(const char *chars, int length);
 ObjUpvalue *object_new_upvalue(Value *slot);
+void object_load_continuation(ObjContinuation *cont);
+void object_mark_continuation(ObjContinuation *cont);
+void object_free_continuation(ObjContinuation *cont);
 void object_print_object(Value value);
 
 static inline bool object_is_obj_type(Value value, ObjType type)

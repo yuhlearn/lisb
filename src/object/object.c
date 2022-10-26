@@ -8,6 +8,12 @@
 #include <string.h>
 #include <stdlib.h>
 
+typedef struct ObjContinuation
+{
+    Obj obj;
+    State state;
+} ObjContinuation;
+
 size_t next_id = 1;
 
 #define OBJECT_ALLOCATE_OBJ(type, objectType) \
@@ -45,18 +51,15 @@ ObjClosure *object_new_closure(ObjFunction *function)
     return closure;
 }
 
-ObjContinuation *object_new_continuation(struct VM *vm)
+ObjContinuation *object_new_continuation()
 {
-    VM *vm_copy = (struct VM *)MEMORY_ALLOCATE(VM, 1);
-    if (vm_copy == NULL)
-    {
-        printf("Failed to allocate memory for continuation.");
-        exit(1);
-    }
-    memcpy(vm_copy, vm, sizeof(VM));
-
     ObjContinuation *cont = OBJECT_ALLOCATE_OBJ(ObjContinuation, OBJ_CONTINUATION);
-    cont->vm = vm_copy;
+
+    memcpy(cont->state.call_frames, vm.call_frames, sizeof(CallFrame) * VM_FRAMES_MAX);
+    memcpy(cont->state.stack, vm.stack, sizeof(Value) * VM_STACK_MAX);
+    cont->state.frame_count = vm.frame_count;
+    cont->state.open_upvalues = vm.open_upvalues;
+    cont->state.stack_top = vm.stack_top;
 
     return cont;
 }
@@ -149,6 +152,38 @@ ObjNative *object_new_native(NativeFn function)
     ObjNative *native = OBJECT_ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
     native->function = function;
     return native;
+}
+
+void object_load_continuation(ObjContinuation *cont)
+{
+    memcpy(vm.call_frames, cont->state.call_frames, sizeof(CallFrame) * VM_FRAMES_MAX);
+    memcpy(vm.stack, cont->state.stack, sizeof(Value) * VM_STACK_MAX);
+    vm.frame_count = cont->state.frame_count;
+    vm.open_upvalues = cont->state.open_upvalues;
+    vm.stack_top = cont->state.stack_top;
+}
+
+void object_mark_continuation(ObjContinuation *cont)
+{
+    for (Value *slot = cont->state.stack; slot < cont->state.stack_top; slot++)
+    {
+        memory_mark_value(*slot);
+    }
+
+    for (int i = 0; i < cont->state.frame_count; i++)
+    {
+        memory_mark_object((Obj *)cont->state.call_frames[i].closure);
+    }
+
+    for (ObjUpvalue *upvalue = cont->state.open_upvalues; upvalue != NULL; upvalue = upvalue->next)
+    {
+        memory_mark_object((Obj *)upvalue);
+    }
+}
+
+void object_free_continuation(ObjContinuation *cont)
+{
+    MEMORY_FREE(ObjContinuation, cont);
 }
 
 void object_print_object(Value value)

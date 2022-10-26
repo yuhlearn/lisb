@@ -160,7 +160,8 @@ static bool vm_call_value(Value callee, int arg_count)
             ObjContinuation *cont = OBJECT_AS_CONTINUATION(callee);
             Value result = vm_pop();
 
-            vm = *(VM *)cont->vm;
+            object_load_continuation(cont);
+
             vm.call_frames[vm.frame_count - 1].ip += 2; // Skip the call/cc call
 
             vm_pop();        // The inital procedure

@@ -75,7 +75,7 @@ void memory_mark_object(Obj *object)
     if (object->type == OBJ_CONTINUATION)
     {
         ObjContinuation *cont = (ObjContinuation *)object;
-        memory_mark_roots((VM *)cont->vm);
+        object_mark_continuation(cont);
     }
 }
 
@@ -116,7 +116,7 @@ static void memory_blacken_object(Obj *object)
     case OBJ_CONTINUATION:
     {
         ObjContinuation *cont = (ObjContinuation *)object;
-        memory_mark_roots((VM *)cont->vm);
+        object_mark_continuation(cont);
         break;
     }
     case OBJ_FUNCTION:
@@ -156,8 +156,7 @@ static void memory_free_object(Obj *object)
     case OBJ_CONTINUATION:
     {
         ObjContinuation *cont = (ObjContinuation *)object;
-        MEMORY_FREE(VM, cont->vm);
-        MEMORY_FREE(ObjContinuation, cont);
+        object_free_continuation(cont);
         break;
     }
     case OBJ_FUNCTION:

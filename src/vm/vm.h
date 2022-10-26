@@ -26,6 +26,17 @@ typedef struct
     Value *stack_top;
 
     ObjUpvalue *open_upvalues;
+} State;
+
+typedef struct
+{
+    CallFrame call_frames[VM_FRAMES_MAX];
+    int frame_count;
+
+    Value stack[VM_STACK_MAX];
+    Value *stack_top;
+
+    ObjUpvalue *open_upvalues;
 
     Table strings;
     Table globals;
