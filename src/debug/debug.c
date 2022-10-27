@@ -102,6 +102,8 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
         return debug_jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
     case OP_CALL:
         return debug_byte_instruction("OP_CALL", chunk, offset);
+    case OP_TAIL_CALL:
+        return debug_byte_instruction("OP_TAIL_CALL", chunk, offset);
     case OP_CLOSURE:
     {
         offset++;

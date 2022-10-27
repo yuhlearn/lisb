@@ -1,5 +1,5 @@
 CC := gcc
-std=c99 -pedantic -Wall -Wextra -D_POSIX_C_SOURCE=200112L
+std=c99 -pedantic -Wall -Wextra -O3 -D_POSIX_C_SOURCE=200112L
 
 SRC := src
 INC := include
