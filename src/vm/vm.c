@@ -342,7 +342,6 @@ static InterpretResult vm_run()
             {
                 return VM_RUNTIME_ERROR;
             }
-
             frame = &vm.call_frames[vm.frame_count - 1];
             break;
         }
@@ -354,15 +353,12 @@ static InterpretResult vm_run()
             vm_close_upvalues(frame->slots);
 
             // Shift the arguments plus closure to be called
-            Value *current_top = vm.stack_top;
-            vm.stack_top = frame->slots + arg_count + 1;
-
-            for (int i = arg_count + 1; i > 0; i--)
-            {
-                vm.stack_top[-i] = current_top[-i];
-            }
+            memcpy(frame->slots,
+                   vm.stack_top - (arg_count + 1),
+                   sizeof(Value) * (arg_count + 1));
 
             // Restore the stack top and pop the current call frame
+            vm.stack_top = frame->slots + arg_count + 1;
             vm.frame_count--;
             frame = &vm.call_frames[vm.frame_count - 1];
 
@@ -371,9 +367,7 @@ static InterpretResult vm_run()
             {
                 return VM_RUNTIME_ERROR;
             }
-
             frame = &vm.call_frames[vm.frame_count - 1];
-
             break;
         }
         case OP_CLOSURE:
