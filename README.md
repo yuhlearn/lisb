@@ -24,7 +24,8 @@ This is an ongoing project. For more information about what is has been done and
 * [x] Implement closures.
 * [x] Support for garbage collection.
 * [x] Implement continuations.
-* [ ] Support tail recursion.
+* [x] Support tail recursion.
 * [ ] Implement quotes and evaluation.
 * [ ] Hygenic macros.
+* [ ] Add remaining data types
 * [ ] `<void>`

@@ -20,6 +20,7 @@ typedef enum
     OP_JUMP,
     OP_JUMP_IF_FALSE,
     OP_CALL,
+    OP_TAIL_CALL,
     OP_CLOSURE,
     OP_CONTINUATION,
     OP_CLOSE_UPVALUE,

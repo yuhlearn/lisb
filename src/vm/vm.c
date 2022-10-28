@@ -78,14 +78,6 @@ void vm_init_vm()
 {
     vm_reset_stack();
     memory_init_memory();
-    // vm.objects = NULL;
-
-    // vm.bytes_allocated = 0;
-    // vm.next_gc = 1024 * 1024;
-
-    // vm.gray_count = 0;
-    // vm.gray_capacity = 0;
-    //  vm.gray_stack = NULL;
 
     table_init_table(&vm.globals);
     table_init_table(&vm.strings);
@@ -350,7 +342,31 @@ static InterpretResult vm_run()
             {
                 return VM_RUNTIME_ERROR;
             }
+            frame = &vm.call_frames[vm.frame_count - 1];
+            break;
+        }
+        case OP_TAIL_CALL:
+        {
+            int arg_count = VM_READ_BYTE();
 
+            // Close upvalues
+            vm_close_upvalues(frame->slots);
+
+            // Shift the arguments plus closure to be called
+            memcpy(frame->slots,
+                   vm.stack_top - (arg_count + 1),
+                   sizeof(Value) * (arg_count + 1));
+
+            // Restore the stack top and pop the current call frame
+            vm.stack_top = frame->slots + arg_count + 1;
+            vm.frame_count--;
+            frame = &vm.call_frames[vm.frame_count - 1];
+
+            // Call as normal
+            if (!vm_call_value(vm_peek(arg_count), arg_count))
+            {
+                return VM_RUNTIME_ERROR;
+            }
             frame = &vm.call_frames[vm.frame_count - 1];
             break;
         }

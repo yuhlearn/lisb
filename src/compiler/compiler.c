@@ -53,7 +53,7 @@ Compiler compiler;
 Environment *current = NULL;
 Chunk *compiling_chunk;
 
-static void compiler_compile_expression(const SExpr *sexpr);
+static void compiler_compile_expression(const SExpr *sexpr, bool tail);
 static void compiler_define_variable(const int global);
 static void compiler_compile_define(const SExpr *sexpr);
 
@@ -481,16 +481,20 @@ static void compiler_compile_lambda_expression(const SExpr *sexpr)
 
     for (SExpr *expr = def; !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
     {
-        compiler_compile_expression(PARSER_CAR(expr));
-
         if (!PARSER_IS_NULL(PARSER_CDR(expr)))
+        {
+            compiler_compile_expression(PARSER_CAR(expr), false);
             compiler_emit_byte(OP_POP);
+        }
+        else
+        {
+            compiler_compile_expression(PARSER_CAR(expr), true);
+        }
     }
-
     // End the environment and emit implicit return
     ObjFunction *function = compiler_end_environment();
 
-    // Push the function to the stack
+    // Push the function onto the stack
     compiler_emit_bytes(OP_CLOSURE, compiler_make_constant(VALUE_OBJ_VAL(function)));
 
     for (int i = 0; i < function->upvalue_count; i++)
@@ -502,23 +506,23 @@ static void compiler_compile_lambda_expression(const SExpr *sexpr)
 
 static void compiler_compile_set_expression(const SExpr *sexpr)
 {
-    compiler_compile_expression(PARSER_CDDAR(sexpr));
+    compiler_compile_expression(PARSER_CDDAR(sexpr), false);
     compiler_compile_named_variable(PARSER_AS_ATOM(PARSER_CDAR(sexpr)), true);
 }
 
-static void compiler_compile_let_expression(const SExpr *sexpr)
+static void compiler_compile_let_expression(const SExpr *sexpr, bool tail)
 {
     SExpr *def;
 
     compiler_begin_scope();
 
-    // Make space for return value at index 0
-    current->local_count++;
+    // Save index for return value
+    int result = current->local_count;
 
     for (SExpr *bind = PARSER_CDAR(sexpr); !PARSER_IS_NULL(bind); bind = PARSER_CDR(bind))
     {
         int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CAAR(bind)));
-        compiler_compile_expression(PARSER_CADAR(bind));
+        compiler_compile_expression(PARSER_CADAR(bind), false);
         compiler_define_variable(var);
     }
 
@@ -529,25 +533,30 @@ static void compiler_compile_let_expression(const SExpr *sexpr)
 
     for (SExpr *expr = def; !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
     {
-        compiler_compile_expression(PARSER_CAR(expr));
+        compiler_compile_expression(PARSER_CAR(expr), false);
         if (!PARSER_IS_NULL(PARSER_CDR(expr)))
             compiler_emit_byte(OP_POP);
     }
 
-    // Set the return value at index
-    compiler_emit_bytes(OP_SET_LOCAL, 0);
-    compiler_emit_byte(OP_POP);
+    // Set the return value at return index
+    compiler_emit_bytes(OP_SET_LOCAL, result);
 
     compiler_end_scope();
 }
 
-static void compiler_compile_begin_expression(const SExpr *sexpr)
+static void compiler_compile_begin_expression(const SExpr *sexpr, bool tail)
 {
     for (SExpr *expr = PARSER_CDR(sexpr); !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
     {
-        compiler_compile_expression(PARSER_CAR(expr));
         if (!PARSER_IS_NULL(PARSER_CDR(expr)))
+        {
+            compiler_compile_expression(PARSER_CAR(expr), false);
             compiler_emit_byte(OP_POP);
+        }
+        else
+        {
+            compiler_compile_expression(PARSER_CAR(expr), tail);
+        }
     }
 }
 
@@ -559,18 +568,18 @@ static void compiler_compile_if_expression(const SExpr *sexpr)
     then_expr = PARSER_CDDAR(sexpr);
     else_expr = PARSER_CDDDAR(sexpr);
 
-    compiler_compile_expression(cond_expr);
+    compiler_compile_expression(cond_expr, false);
 
     int then_jump = compiler_emit_jump(OP_JUMP_IF_FALSE);
     compiler_emit_byte(OP_POP);
 
-    compiler_compile_expression(then_expr);
+    compiler_compile_expression(then_expr, false);
 
     int else_jump = compiler_emit_jump(OP_JUMP);
     compiler_patch_jump(then_jump);
     compiler_emit_byte(OP_POP);
 
-    compiler_compile_expression(else_expr);
+    compiler_compile_expression(else_expr, false);
 
     compiler_patch_jump(else_jump);
 }
@@ -581,7 +590,7 @@ static void compiler_compile_call_cc_expression(const SExpr *sexpr)
     uint8_t arg_count = 1;
 
     // Push the argument function first
-    compiler_compile_expression(expr);
+    compiler_compile_expression(expr, false);
 
     // Create and push the current continuation
     compiler_emit_byte(OP_CONTINUATION);
@@ -590,26 +599,26 @@ static void compiler_compile_call_cc_expression(const SExpr *sexpr)
     compiler_emit_bytes(OP_CALL, arg_count);
 }
 
-static void compiler_compile_application_expression(const SExpr *sexpr)
+static void compiler_compile_application_expression(const SExpr *sexpr, bool tail)
 {
     const SExpr *expr = sexpr;
     uint8_t arg_count = 0;
 
-    compiler_compile_expression(PARSER_CAR(expr));
+    compiler_compile_expression(PARSER_CAR(expr), false);
 
     for (expr = PARSER_CDR(expr); !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
     {
-        compiler_compile_expression(PARSER_CAR(expr));
+        compiler_compile_expression(PARSER_CAR(expr), false);
 
         if (arg_count >= 255)
             compiler_failed("Can't have more than 255 arguments.");
         arg_count++;
     }
 
-    compiler_emit_bytes(OP_CALL, arg_count);
+    compiler_emit_bytes((tail ? OP_TAIL_CALL : OP_CALL), arg_count);
 }
 
-static void compiler_compile_compound_expression(const SExpr *sexpr)
+static void compiler_compile_compound_expression(const SExpr *sexpr, bool tail)
 {
     switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
     {
@@ -620,10 +629,10 @@ static void compiler_compile_compound_expression(const SExpr *sexpr)
         compiler_compile_set_expression(sexpr);
         break;
     case TOKEN_LET:
-        compiler_compile_let_expression(sexpr);
+        compiler_compile_let_expression(sexpr, tail);
         break;
     case TOKEN_BEGIN:
-        compiler_compile_begin_expression(sexpr);
+        compiler_compile_begin_expression(sexpr, tail);
         break;
     case TOKEN_IF:
         compiler_compile_if_expression(sexpr);
@@ -632,16 +641,16 @@ static void compiler_compile_compound_expression(const SExpr *sexpr)
         compiler_compile_call_cc_expression(sexpr);
         break;
     default:
-        compiler_compile_application_expression(sexpr);
+        compiler_compile_application_expression(sexpr, tail);
         break;
     }
 }
 
-static void compiler_compile_expression(const SExpr *sexpr)
+static void compiler_compile_expression(const SExpr *sexpr, bool tail)
 {
     if (PARSER_IS_CONS(sexpr))
     {
-        compiler_compile_compound_expression(sexpr);
+        compiler_compile_compound_expression(sexpr, tail);
     }
     else
     {
@@ -663,7 +672,7 @@ static void compiler_define_variable(const int global)
 static void compiler_compile_define(const SExpr *sexpr)
 {
     int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CDAR(sexpr)));
-    compiler_compile_expression(PARSER_CDDAR(sexpr));
+    compiler_compile_expression(PARSER_CDDAR(sexpr), false);
     compiler_define_variable(var);
 }
 
@@ -685,7 +694,7 @@ static void compiler_compile_form(const SExpr *sexpr)
     }
     else
     {
-        compiler_compile_expression(sexpr);
+        compiler_compile_expression(sexpr, false);
     }
 }
 
