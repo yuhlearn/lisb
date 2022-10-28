@@ -118,7 +118,7 @@ int debug_disassemble_instruction(Chunk *chunk, int offset)
         {
             int is_local = chunk->code[offset++];
             int index = chunk->code[offset++];
-            printf("%04d      |                     %s %d\n",
+            printf("%04d    |                     %s %d\n",
                    offset - 2, is_local ? "local" : "upvalue", index);
         }
 
