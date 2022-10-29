@@ -5,27 +5,63 @@
 #include <value/value.h>
 #include <chunk/chunk.h>
 
+#define OBJECT_CAR(cons) ((cons)->car)
+#define OBJECT_CDR(cons) ((cons)->cdr)
+
+#define OBJECT_CAAR(cons) (OBJECT_CAR(OBJECT_CAR(cons)))
+#define OBJECT_CADR(cons) (OBJECT_CDR(OBJECT_CAR(cons)))
+#define OBJECT_CDAR(cons) (OBJECT_CAR(OBJECT_CDR(cons)))
+#define OBJECT_CDDR(cons) (OBJECT_CDR(OBJECT_CDR(cons)))
+
+#define OBJECT_CAAAR(cons) (OBJECT_CAR(OBJECT_CAAR(cons)))
+#define OBJECT_CAADR(cons) (OBJECT_CDR(OBJECT_CAAR(cons)))
+#define OBJECT_CADAR(cons) (OBJECT_CAR(OBJECT_CADR(cons)))
+#define OBJECT_CADDR(cons) (OBJECT_CDR(OBJECT_CADR(cons)))
+#define OBJECT_CDAAR(cons) (OBJECT_CAR(OBJECT_CDAR(cons)))
+#define OBJECT_CDADR(cons) (OBJECT_CDR(OBJECT_CDAR(cons)))
+#define OBJECT_CDDAR(cons) (OBJECT_CAR(OBJECT_CDDR(cons)))
+#define OBJECT_CDDDR(cons) (OBJECT_CDR(OBJECT_CDDR(cons)))
+
+#define OBJECT_CAAAAR(cons) (OBJECT_CAAR(OBJECT_CAAR(cons)))
+#define OBJECT_CAADAR(cons) (OBJECT_CDAR(OBJECT_CAAR(cons)))
+#define OBJECT_CAADDR(cons) (OBJECT_CDDR(OBJECT_CAAR(cons)))
+#define OBJECT_CADAAR(cons) (OBJECT_CAAR(OBJECT_CADR(cons)))
+#define OBJECT_CADADR(cons) (OBJECT_CADR(OBJECT_CADR(cons)))
+#define OBJECT_CADDAR(cons) (OBJECT_CDAR(OBJECT_CADR(cons)))
+#define OBJECT_CADDDR(cons) (OBJECT_CDDR(OBJECT_CADR(cons)))
+#define OBJECT_CDAAAR(cons) (OBJECT_CAAR(OBJECT_CDAR(cons)))
+#define OBJECT_CDAADR(cons) (OBJECT_CADR(OBJECT_CDAR(cons)))
+#define OBJECT_CDADAR(cons) (OBJECT_CDAR(OBJECT_CDAR(cons)))
+#define OBJECT_CDADDR(cons) (OBJECT_CDDR(OBJECT_CDAR(cons)))
+#define OBJECT_CDDAAR(cons) (OBJECT_CAAR(OBJECT_CDDR(cons)))
+#define OBJECT_CDDADR(cons) (OBJECT_CADR(OBJECT_CDDR(cons)))
+#define OBJECT_CDDDAR(cons) (OBJECT_CDAR(OBJECT_CDDR(cons)))
+#define OBJECT_CDDDDR(cons) (OBJECT_CDDR(OBJECT_CDDR(cons)))
+
 #define OBJECT_OBJ_TYPE(value) (VALUE_AS_OBJ(value)->type)
 
 #define OBJECT_IS_CLOSURE(value) object_is_obj_type(value, OBJ_CLOSURE)
 #define OBJECT_IS_FUNCTION(value) object_is_obj_type(value, OBJ_FUNCTION)
-#define OBJECT_IS_NATIVE(value) object_is_obj_type(value, OBJ_NATIVE)
+#define OBJECT_IS_PRIMITIVE(value) object_is_obj_type(value, OBJ_PRIMITIVE)
 #define OBJECT_IS_CONTINUATION(value) object_is_obj_type(value, OBJ_CONTINUATION)
+#define OBJECT_IS_CONS(value) object_is_obj_type(value, OBJ_CONS)
 #define OBJECT_IS_STRING(value) object_is_obj_type(value, OBJ_STRING)
 
 #define OBJECT_AS_CLOSURE(value) ((ObjClosure *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_FUNCTION(value) ((ObjFunction *)VALUE_AS_OBJ(value))
-#define OBJECT_AS_NATIVE(value) (((ObjNative *)VALUE_AS_OBJ(value))->function)
+#define OBJECT_AS_PRIMITIVE(value) (((ObjPrimitive *)VALUE_AS_OBJ(value))->function)
 #define OBJECT_AS_CONTINUATION(value) ((ObjContinuation *)VALUE_AS_OBJ(value))
+#define OBJECT_AS_CONS(value) ((ObjCons *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_STRING(value) ((ObjString *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_CSTRING(value) (((ObjString *)VALUE_AS_OBJ(value))->chars)
 
 typedef enum
 {
     OBJ_CLOSURE,
+    OBJ_CONS,
     OBJ_CONTINUATION,
     OBJ_FUNCTION,
-    OBJ_NATIVE,
+    OBJ_PRIMITIVE,
     OBJ_STRING,
     OBJ_UPVALUE
 } ObjType;
@@ -37,6 +73,29 @@ struct Obj
     struct Obj *next;
 };
 
+struct ObjString
+{
+    Obj obj;
+    int length;
+    char *chars;
+    uint32_t hash;
+};
+
+typedef struct
+{
+    Obj obj;
+    Value car;
+    Value cdr;
+} ObjCons;
+
+typedef struct ObjUpvalue
+{
+    Obj obj;
+    Value *location;
+    Value closed;
+    struct ObjUpvalue *next;
+} ObjUpvalue;
+
 typedef struct
 {
     Obj obj;
@@ -46,29 +105,13 @@ typedef struct
     size_t id;
 } ObjFunction;
 
-typedef Value (*NativeFn)(int arcg_cout, Value *args);
+typedef Value (*PrimitiveFn)(int arcg_cout, Value *args);
 
 typedef struct
 {
     Obj obj;
-    NativeFn function;
-} ObjNative;
-
-struct ObjString
-{
-    Obj obj;
-    int length;
-    char *chars;
-    uint32_t hash;
-};
-
-typedef struct ObjUpvalue
-{
-    Obj obj;
-    Value *location;
-    Value closed;
-    struct ObjUpvalue *next;
-} ObjUpvalue;
+    PrimitiveFn function;
+} ObjPrimitive;
 
 typedef struct
 {
@@ -85,7 +128,8 @@ ObjClosure *object_new_closure(ObjFunction *function);
 ObjContinuation *object_new_continuation();
 ObjFunction *object_new_script();
 ObjFunction *object_new_function();
-ObjNative *object_new_native(NativeFn function);
+ObjPrimitive *object_new_native(PrimitiveFn function);
+ObjCons *object_new_cons(Value car, Value cdr);
 ObjString *object_take_string(char *chars, int length);
 ObjString *object_copy_string(const char *chars, int length);
 ObjUpvalue *object_new_upvalue(Value *slot);

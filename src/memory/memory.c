@@ -13,6 +13,7 @@
 
 Memory memory;
 
+void memory_mark_value(Value value);
 static void memory_mark_roots(VM *vm);
 
 void *memory_reallocate(void *pointer, size_t old_size, size_t new_size)
@@ -72,7 +73,13 @@ void memory_mark_object(Obj *object)
 
     memory.gray_stack[memory.gray_count++] = object;
 
-    if (object->type == OBJ_CONTINUATION)
+    if (object->type == OBJ_CONS)
+    {
+        ObjCons *cons = (ObjCons *)object;
+        memory_mark_value(cons->car);
+        memory_mark_value(cons->cdr);
+    }
+    else if (object->type == OBJ_CONTINUATION)
     {
         ObjContinuation *cont = (ObjContinuation *)object;
         object_mark_continuation(cont);
@@ -128,7 +135,7 @@ static void memory_blacken_object(Obj *object)
     case OBJ_UPVALUE:
         memory_mark_value(((ObjUpvalue *)object)->closed);
         break;
-    case OBJ_NATIVE:
+    case OBJ_PRIMITIVE:
     case OBJ_STRING:
         break;
     }
@@ -166,8 +173,8 @@ static void memory_free_object(Obj *object)
         MEMORY_FREE(ObjFunction, object);
         break;
     }
-    case OBJ_NATIVE:
-        MEMORY_FREE(ObjNative, object);
+    case OBJ_PRIMITIVE:
+        MEMORY_FREE(ObjPrimitive, object);
         break;
     case OBJ_STRING:
     {

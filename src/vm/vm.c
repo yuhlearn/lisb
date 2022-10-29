@@ -64,7 +64,7 @@ void vm_runtime_error(const char *format, ...)
     vm_reset_stack();
 }
 
-static void vm_define_primitive(const char *name, NativeFn function)
+static void vm_define_primitive(const char *name, PrimitiveFn function)
 {
     vm_push(VALUE_OBJ_VAL(object_copy_string(name, (int)strlen(name))));
     vm_push(VALUE_OBJ_VAL(object_new_native(function)));
@@ -96,6 +96,12 @@ void vm_init_vm()
     vm_define_primitive(">", primitive_num_ge);
     vm_define_primitive("<=", primitive_num_leq);
     vm_define_primitive(">=", primitive_num_geq);
+
+    vm_define_primitive("car", primitive_car);
+    vm_define_primitive("cdr", primitive_cdr);
+    vm_define_primitive("cons", primitive_cons);
+    vm_define_primitive("list", primitive_list);
+    vm_define_primitive("append", primitive_append);
 }
 
 static bool vm_call(ObjClosure *closure, int arg_count)
@@ -132,10 +138,10 @@ static bool vm_call_value(Value callee, int arg_count)
         {
             return vm_call(OBJECT_AS_CLOSURE(callee), arg_count);
         }
-        case OBJ_NATIVE:
+        case OBJ_PRIMITIVE:
         {
-            NativeFn native = OBJECT_AS_NATIVE(callee);
-            Value result = native(arg_count, vm.stack_top - arg_count);
+            PrimitiveFn primitive = OBJECT_AS_PRIMITIVE(callee);
+            Value result = primitive(arg_count, vm.stack_top - arg_count);
             vm.stack_top -= arg_count + 1;
             vm_push(result);
             return true;

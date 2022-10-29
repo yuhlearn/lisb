@@ -16,8 +16,8 @@ typedef struct ObjContinuation
 
 size_t next_id = 1;
 
-#define OBJECT_ALLOCATE_OBJ(type, objectType) \
-    (type *)object_allocate_object(sizeof(type), objectType)
+#define OBJECT_ALLOCATE_OBJ(type, object_type) \
+    (type *)object_allocate_object(sizeof(type), object_type)
 
 static Obj *object_allocate_object(size_t size, ObjType type)
 {
@@ -88,8 +88,6 @@ static ObjString *object_allocate_string(char *chars, int length)
     string->length = length;
     string->chars = chars;
 
-    // Push then pop the string to the constant table so it doesn't get
-    // garbage collected before being interned
     vm_push(VALUE_OBJ_VAL(string));
     int slot = table_declare(&vm.strings, string);
     table_set(&vm.strings, slot, VALUE_NULL_VAL);
@@ -98,15 +96,14 @@ static ObjString *object_allocate_string(char *chars, int length)
     return string;
 }
 
-static uint32_t object_hash_string(const char *key, int length)
+ObjCons *object_new_cons(Value car, Value cdr)
 {
-    uint32_t hash = 2166136261u;
-    for (int i = 0; i < length; i++)
-    {
-        hash ^= (uint8_t)key[i];
-        hash *= 16777619;
-    }
-    return hash;
+    ObjCons *cons = OBJECT_ALLOCATE_OBJ(ObjCons, OBJ_CONS);
+
+    cons->car = car;
+    cons->cdr = cdr;
+
+    return cons;
 }
 
 ObjString *object_take_string(char *chars, int length)
@@ -142,14 +139,9 @@ ObjUpvalue *object_new_upvalue(Value *slot)
     return upvalue;
 }
 
-static void object_print_function(ObjFunction *function)
+ObjPrimitive *object_new_native(PrimitiveFn function)
 {
-    printf("#<procedure %u>", (unsigned)function->id);
-}
-
-ObjNative *object_new_native(NativeFn function)
-{
-    ObjNative *native = OBJECT_ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+    ObjPrimitive *native = OBJECT_ALLOCATE_OBJ(ObjPrimitive, OBJ_PRIMITIVE);
     native->function = function;
     return native;
 }
@@ -186,6 +178,33 @@ void object_free_continuation(ObjContinuation *cont)
     MEMORY_FREE(ObjContinuation, cont);
 }
 
+static void object_print_function(ObjFunction *function)
+{
+    printf("#<procedure %u>", (unsigned)function->id);
+}
+
+static void object_print_cons(Value cons)
+{
+    ObjCons *current = NULL;
+    Value next = cons;
+    bool is_cons = true;
+
+    do
+    {
+        current = OBJECT_AS_CONS(next);
+        value_print_value(OBJECT_CAR(current));
+        next = OBJECT_CDR(current);
+        if (is_cons = OBJECT_IS_CONS(next))
+            printf(" ");
+    } while (is_cons);
+
+    if (!VALUE_IS_NULL(next))
+    {
+        printf(" . ");
+        value_print_value(next);
+    }
+}
+
 void object_print_object(Value value)
 {
     switch (OBJECT_OBJ_TYPE(value))
@@ -199,8 +218,13 @@ void object_print_object(Value value)
     case OBJ_CONTINUATION:
         printf("#<continuation>");
         break;
-    case OBJ_NATIVE:
+    case OBJ_PRIMITIVE:
         printf("#<primitive>");
+        break;
+    case OBJ_CONS:
+        printf("(");
+        object_print_cons(value);
+        printf(")");
         break;
     case OBJ_STRING:
         printf("%s", OBJECT_AS_CSTRING(value));

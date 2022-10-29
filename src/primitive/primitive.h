@@ -18,4 +18,10 @@ Value primitive_num_ge(int arg_count, Value *args);
 Value primitive_num_leq(int arg_count, Value *args);
 Value primitive_num_geq(int arg_count, Value *args);
 
+Value primitive_car(int arg_count, Value *args);
+Value primitive_cdr(int arg_count, Value *args);
+Value primitive_cons(int arg_count, Value *args);
+Value primitive_list(int arg_count, Value *args);
+Value primitive_append(int arg_count, Value *args);
+
 #endif
