@@ -10,7 +10,7 @@ Why Scheme? Scheme is an old langue and it's very well documented. It also has a
 
 Why a bytecode interpreter? I have written simple compilers that generate assembly code before, but never an interpreter. Writing a feature-rich compiler on your own is hard work and writing your own bytecode interpreter makes that work a little easier. I didn't want to make it too easy, however, so I chose a stack-based approach instead of putting everything on the heap, which is more in line with traditional Scheme implementations.
 
-Much of the work is owed to the book *Crafting Interpreters*, especially the implementation of closures (which uses upvalues like in Lua).
+Much of the work is owed to the book *Crafting Interpreters* by Robert Nystrom, especially the implementation of closures (which uses upvalues like in Lua), and R. Kent Dybvig's dissertation *Three Implementation Models for Scheme*.
 
 ## Roadmap
 
