@@ -4,9 +4,10 @@
 #include <common/common.h>
 #include <value/value.h>
 #include <chunk/chunk.h>
+#include <scanner/scanner.h>
 
-#define OBJECT_CAR(cons) ((cons)->car)
-#define OBJECT_CDR(cons) ((cons)->cdr)
+#define OBJECT_CAR(cons) ((OBJECT_AS_CONS(cons))->car)
+#define OBJECT_CDR(cons) ((OBJECT_AS_CONS(cons))->cdr)
 
 #define OBJECT_CAAR(cons) (OBJECT_CAR(OBJECT_CAR(cons)))
 #define OBJECT_CADR(cons) (OBJECT_CDR(OBJECT_CAR(cons)))
@@ -45,6 +46,7 @@
 #define OBJECT_IS_PRIMITIVE(value) object_is_obj_type(value, OBJ_PRIMITIVE)
 #define OBJECT_IS_CONTINUATION(value) object_is_obj_type(value, OBJ_CONTINUATION)
 #define OBJECT_IS_CONS(value) object_is_obj_type(value, OBJ_CONS)
+#define OBJECT_IS_SYMBOL(value) object_is_obj_type(value, OBJ_SYMBOL)
 #define OBJECT_IS_STRING(value) object_is_obj_type(value, OBJ_STRING)
 
 #define OBJECT_AS_CLOSURE(value) ((ObjClosure *)VALUE_AS_OBJ(value))
@@ -52,6 +54,7 @@
 #define OBJECT_AS_PRIMITIVE(value) (((ObjPrimitive *)VALUE_AS_OBJ(value))->function)
 #define OBJECT_AS_CONTINUATION(value) ((ObjContinuation *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_CONS(value) ((ObjCons *)VALUE_AS_OBJ(value))
+#define OBJECT_AS_SYMBOL(value) ((ObjSymbol *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_STRING(value) ((ObjString *)VALUE_AS_OBJ(value))
 #define OBJECT_AS_CSTRING(value) (((ObjString *)VALUE_AS_OBJ(value))->chars)
 
@@ -63,6 +66,7 @@ typedef enum
     OBJ_FUNCTION,
     OBJ_PRIMITIVE,
     OBJ_STRING,
+    OBJ_SYMBOL,
     OBJ_UPVALUE
 } ObjType;
 
@@ -78,7 +82,6 @@ struct ObjString
     Obj obj;
     int length;
     char *chars;
-    uint32_t hash;
 };
 
 typedef struct
@@ -95,6 +98,16 @@ typedef struct ObjUpvalue
     Value closed;
     struct ObjUpvalue *next;
 } ObjUpvalue;
+
+typedef struct
+{
+    Obj obj;
+    TokenType token;
+    int length;
+    char *chars;
+    int line;
+    int row;
+} ObjSymbol;
 
 typedef struct
 {

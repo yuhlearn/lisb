@@ -30,7 +30,6 @@ int main()
 	};
 
 	TestPair parser_tests[] = {
-		{"parser_parse_empty_test", parser_parse_empty_test},
 		{"parser_parse_constant_test_1", parser_parse_constant_test_1},
 		{"parser_parse_constant_test_2", parser_parse_constant_test_2},
 		{"parser_parse_constant_test_3", parser_parse_constant_test_3},

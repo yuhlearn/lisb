@@ -262,7 +262,7 @@ Value primitive_car(int arg_count, Value *args)
     else if (!OBJECT_IS_CONS(args[0]))
         vm_runtime_error("Expected cons, at argument position %d.", 1);
 
-    return OBJECT_CAR(OBJECT_AS_CONS(args[0]));
+    return OBJECT_CAR(args[0]);
 }
 
 Value primitive_cdr(int arg_count, Value *args)
@@ -273,7 +273,7 @@ Value primitive_cdr(int arg_count, Value *args)
     else if (!OBJECT_IS_CONS(args[0]))
         vm_runtime_error("Expected cons, at argument position %d.", 1);
 
-    return OBJECT_CDR(OBJECT_AS_CONS(args[0]));
+    return OBJECT_CDR(args[0]);
 }
 
 Value primitive_cons(int arg_count, Value *args)
@@ -309,7 +309,7 @@ Value primitive_append(int arg_count, Value *args)
     if (arg_count > 0)
     {
         Value tail = args[arg_count - 1];
-        ObjCons *last = NULL;
+        Value last = VALUE_NULL_VAL;
 
         for (int i = 0; i < arg_count - 1; i++)
         {
@@ -317,21 +317,20 @@ Value primitive_append(int arg_count, Value *args)
 
             for (; OBJECT_IS_CONS(tmp); tmp = OBJECT_CDR(last))
             {
-                ObjCons *tmp_obj = OBJECT_AS_CONS(tmp);
-                tmp = VALUE_OBJ_VAL(object_new_cons(OBJECT_CAR(tmp_obj), OBJECT_CDR(tmp_obj)));
+                tmp = VALUE_OBJ_VAL(object_new_cons(OBJECT_CAR(tmp), OBJECT_CDR(tmp)));
 
-                if (last == NULL)
+                if (VALUE_IS_NULL(last))
                     vm_push(head = tmp);
                 else
                     OBJECT_CDR(last) = tmp;
-                last = OBJECT_AS_CONS(tmp);
+                last = tmp;
             }
 
             if (!VALUE_IS_NULL(tmp))
                 vm_runtime_error("Expected list, at argument position %d.", i + 1);
         }
 
-        if (last == NULL)
+        if (VALUE_IS_NULL(last))
             return tail;
 
         OBJECT_CDR(last) = tail;

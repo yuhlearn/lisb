@@ -17,9 +17,9 @@ typedef struct ObjContinuation
 size_t next_id = 1;
 
 #define OBJECT_ALLOCATE_OBJ(type, object_type) \
-    (type *)object_allocate_object(sizeof(type), object_type)
+    (type *)parser_allocate_object(sizeof(type), object_type)
 
-static Obj *object_allocate_object(size_t size, ObjType type)
+static Obj *parser_allocate_object(size_t size, ObjType type)
 {
     Obj *object = (Obj *)memory_reallocate(NULL, 0, size);
     object->type = type;
@@ -121,6 +121,7 @@ ObjString *object_take_string(char *chars, int length)
 ObjString *object_copy_string(const char *chars, int length)
 {
     ObjString *interned = table_find_string(&vm.strings, chars, length);
+
     if (interned != NULL)
         return interned;
 
@@ -185,13 +186,13 @@ static void object_print_function(ObjFunction *function)
 
 static void object_print_cons(Value cons)
 {
-    ObjCons *current = NULL;
+    Value current = VALUE_NULL_VAL;
     Value next = cons;
     bool is_cons = true;
 
     do
     {
-        current = OBJECT_AS_CONS(next);
+        current = next;
         value_print_value(OBJECT_CAR(current));
         next = OBJECT_CDR(current);
         if (is_cons = OBJECT_IS_CONS(next))
@@ -226,8 +227,15 @@ void object_print_object(Value value)
         object_print_cons(value);
         printf(")");
         break;
+    case OBJ_SYMBOL:
+        printf("%.*s",
+               OBJECT_AS_SYMBOL(value)->length,
+               OBJECT_AS_SYMBOL(value)->chars);
+        break;
     case OBJ_STRING:
-        printf("%s", OBJECT_AS_CSTRING(value));
+        printf("\"%.*s\"",
+               OBJECT_AS_STRING(value)->length,
+               OBJECT_AS_STRING(value)->chars);
         break;
     case OBJ_UPVALUE:
         printf("upvalue");

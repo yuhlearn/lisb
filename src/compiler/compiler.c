@@ -15,7 +15,7 @@
 
 typedef struct
 {
-    Token name;
+    ObjSymbol name;
     int depth;
     bool is_captured;
 } Local;
@@ -53,9 +53,9 @@ Compiler compiler;
 Environment *current = NULL;
 Chunk *compiling_chunk;
 
-static void compiler_compile_expression(const SExpr *sexpr, bool tail);
+static void compiler_compile_expression(const Value sexpr, bool tail);
 static void compiler_define_variable(const int global);
-static void compiler_compile_define(const SExpr *sexpr);
+static void compiler_compile_define(const Value sexpr);
 
 static Chunk *compiler_current_chunk()
 {
@@ -64,30 +64,21 @@ static Chunk *compiler_current_chunk()
 
 /* Error management */
 
-static void compiler_failed_at(Token *token, const char *message)
+static void compiler_failed_at(ObjSymbol *symbol, const char *message)
 {
-    fprintf(stderr, "[%d:%d] Compiler failed", token->line, token->row);
+    fprintf(stderr, "[%d:%d] Compiler failed at '%.*s': %s\n",
+            symbol->line,
+            symbol->row,
+            symbol->length,
+            symbol->chars,
+            message);
 
-    if (token->type == TOKEN_EOF)
-    {
-        fprintf(stderr, " at end");
-    }
-    else if (token->type == TOKEN_FAIL)
-    {
-        // Nothing.
-    }
-    else
-    {
-        fprintf(stderr, " at '%.*s'", token->length, token->start);
-    }
-
-    fprintf(stderr, ": %s\n", message);
     compiler.failed = true;
 }
 
 static void compiler_failed(const char *message)
 {
-    fprintf(stderr, "[%d:%d] Compiler failed: %s\n", message);
+    fprintf(stderr, "Compiler failed: %s\n", message);
     compiler.failed = true;
 }
 
@@ -128,7 +119,7 @@ static uint8_t compiler_make_constant(Value value)
     int constant = chunk_add_constant(compiler_current_chunk(), value);
     if (constant > UINT8_MAX)
     {
-        // compiler_failed("Too many constants in one chunk.");
+        compiler_failed("Too many constants in one chunk.");
         return 0;
     }
 
@@ -156,34 +147,31 @@ static void compiler_patch_jump(int offset)
     compiler_current_chunk()->code[offset + 1] = jump & 0xff;
 }
 
-static uint8_t compiler_identifier_constant(Token *name)
-{
-    return compiler_make_constant(VALUE_OBJ_VAL(object_copy_string(name->start,
-                                                                   name->length)));
-}
-
-static bool compiler_identifiers_equal(Token *a, Token *b)
+static bool compiler_identifiers_equal(ObjSymbol *a, ObjSymbol *b)
 {
     if (a->length != b->length)
         return false;
-    return memcmp(a->start, b->start, a->length) == 0;
+    return memcmp(a->chars, b->chars, a->length) == 0;
 }
 
-static void compiler_add_local(Token name)
+static void compiler_add_local(const Value symbol)
 {
+    ObjSymbol *name = OBJECT_AS_SYMBOL(symbol);
+
     if (current->local_count == UINT8_COUNT)
     {
-        compiler_failed_at(&name, "Too many local variables in function.");
+        compiler_failed_at(OBJECT_AS_SYMBOL(symbol),
+                           "Too many local variables in function.");
         return;
     }
 
     Local *local = &current->locals[current->local_count++];
-    local->name = name;
+    local->name = *name;
     local->depth = -1;
     local->is_captured = false;
 }
 
-static int compiler_resolve_local(Environment *env, Token *name)
+static int compiler_resolve_local(Environment *env, ObjSymbol *name)
 {
     for (int i = env->local_count - 1; i >= 0; i--)
     {
@@ -192,7 +180,7 @@ static int compiler_resolve_local(Environment *env, Token *name)
         {
             if (local->depth == -1)
             {
-                compiler_failed_at(name, "Can't read local variable in its own initializer.");
+                compiler_failed("Can't read local variable in its own initializer.");
             }
             return i;
         }
@@ -225,7 +213,7 @@ static int compiler_add_upvalue(Environment *env, uint8_t index, bool is_local)
     return env->function->upvalue_count++;
 }
 
-static int compiler_resolve_upvalue(Environment *env, Token *name)
+static int compiler_resolve_upvalue(Environment *env, ObjSymbol *name)
 {
     if (env->enclosing == NULL)
         return -1;
@@ -248,8 +236,10 @@ static int compiler_resolve_upvalue(Environment *env, Token *name)
     return -1;
 }
 
-static int compiler_declare_variable(Token name)
+static int compiler_declare_variable(const Value symbol)
 {
+    ObjSymbol *name = OBJECT_AS_SYMBOL(symbol);
+
     for (int i = current->local_count - 1; i >= 0; i--)
     {
         Local *local = &current->locals[i];
@@ -258,18 +248,19 @@ static int compiler_declare_variable(Token name)
             break;
         }
 
-        if (compiler_identifiers_equal(&name, &local->name))
+        if (compiler_identifiers_equal(name, &local->name))
         {
-            compiler_failed_at(&name, "Duplicate identifier in 'let' expression.");
+            compiler_failed_at(OBJECT_AS_SYMBOL(symbol),
+                               "Duplicate identifier in 'let' expression.");
         }
     }
 
     if (current->scope_depth == 0)
     {
-        return table_declare(&vm.globals, object_copy_string(name.start, name.length));
+        return table_declare(&vm.globals, object_copy_string(name->chars, name->length));
     }
 
-    compiler_add_local(name);
+    compiler_add_local(symbol);
 
     return -1;
 }
@@ -315,7 +306,7 @@ static void compiler_init_environment(Environment *env, FunctionType type)
     Local *local = &current->locals[current->local_count++];
     local->depth = 0;
     local->is_captured = false;
-    local->name.start = "";
+    local->name.chars = "";
     local->name.length = 0;
 }
 
@@ -337,26 +328,23 @@ static ObjFunction *compiler_end_environment()
     return function;
 }
 
-static bool compiler_is_definition(const SExpr *sexpr)
+static bool compiler_is_definition(const Value sexpr)
 {
-    if (PARSER_TYPE(sexpr) == SEXPR_CONS &&
-        PARSER_CAR(sexpr)->type == SEXPR_ATOM)
+    if (OBJECT_IS_CONS(sexpr) && OBJECT_IS_SYMBOL(OBJECT_CAR(sexpr)))
     {
-        switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
+        switch (OBJECT_AS_SYMBOL(OBJECT_CAR(sexpr))->token)
         {
         case TOKEN_DEFINE:
             return true;
-            break;
         }
     }
 
     return false;
 }
 
-static void compiler_compile_number(const SExpr *sexpr)
+static void compiler_compile_number(const Value number)
 {
-    double value = strtod(sexpr->value.atom.start, NULL);
-    compiler_emit_constant(VALUE_NUMBER_VAL(value));
+    compiler_emit_constant(number);
 }
 
 static void compiler_mark_initialized()
@@ -367,27 +355,27 @@ static void compiler_mark_initialized()
         current->scope_depth;
 }
 
-static int compiler_resolve_global(Environment *current, Token *name)
+static int compiler_resolve_global(Environment *current, const ObjSymbol *symbol)
 {
-    return table_find_entry(&vm.globals, name->start, name->length);
+    return table_find_entry(&vm.globals, symbol->chars, symbol->length);
 }
 
-static void compiler_compile_named_variable(Token name, bool assign)
+static void compiler_compile_named_variable(const Value symbol, bool assign)
 {
     uint8_t get_op, set_op;
-    int arg = compiler_resolve_local(current, &name);
+    int arg = compiler_resolve_local(current, OBJECT_AS_SYMBOL(symbol));
 
     if (arg != -1)
     {
         get_op = OP_GET_LOCAL;
         set_op = OP_SET_LOCAL;
     }
-    else if ((arg = compiler_resolve_upvalue(current, &name)) != -1)
+    else if ((arg = compiler_resolve_upvalue(current, OBJECT_AS_SYMBOL(symbol))) != -1)
     {
         get_op = OP_GET_UPVALUE;
         set_op = OP_SET_UPVALUE;
     }
-    else if ((arg = compiler_resolve_global(current, &name)) != -1)
+    else if ((arg = compiler_resolve_global(current, OBJECT_AS_SYMBOL(symbol))) != -1)
     {
         if (assign)
         {
@@ -403,7 +391,7 @@ static void compiler_compile_named_variable(Token name, bool assign)
     }
     else
     {
-        compiler_failed_at(&name, "Undefined variable.");
+        compiler_failed_at(OBJECT_AS_SYMBOL(symbol), "Undefined variable.");
     }
 
     if (assign)
@@ -416,79 +404,81 @@ static void compiler_compile_named_variable(Token name, bool assign)
     }
 }
 
-static void compiler_compile_string(bool can_assign, Token token)
+static void compiler_compile_string(const Value sexpr)
 {
-    compiler_emit_constant(VALUE_OBJ_VAL(object_copy_string(token.start + 1,
-                                                            token.length - 2)));
+    ObjString *string = OBJECT_AS_STRING(sexpr);
+    compiler_emit_constant(VALUE_OBJ_VAL(object_copy_string(string->chars,
+                                                            string->length)));
 }
 
-static void compiler_compile_boolean(const SExpr *sexpr, const bool value)
+static void compiler_compile_boolean(const Value sexpr, const bool value)
 {
     compiler_emit_constant(VALUE_BOOL_VAL(value));
 }
 
-static void compiler_compile_atomic_expression(const SExpr *sexpr)
+static void compiler_compile_atomic_expression(const Value sexpr)
 {
-    switch (PARSER_AS_ATOM(sexpr).type)
+
+    switch (sexpr.type)
     {
-    case TOKEN_NUMBER:
+    case VALUE_NUMBER:
         compiler_compile_number(sexpr);
         break;
-    case TOKEN_SYMBOL:
-        compiler_compile_named_variable(PARSER_AS_ATOM(sexpr), false);
-        break;
-    case TOKEN_STRING:
-        compiler_compile_string(true, PARSER_AS_ATOM(sexpr));
-        break;
-    case TOKEN_TRUE:
+    case VALUE_BOOL:
         compiler_compile_boolean(sexpr, true);
         break;
-    case TOKEN_FALSE:
-        compiler_compile_boolean(sexpr, false);
+    case VALUE_OBJ:
+        switch (VALUE_AS_OBJ(sexpr)->type)
+        {
+        case OBJ_SYMBOL:
+            compiler_compile_named_variable(sexpr, false);
+            break;
+        case OBJ_STRING:
+            compiler_compile_string(sexpr);
+            break;
+        }
         break;
     default:
-        compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(sexpr)),
-                           "Unknown symbol.");
+        compiler_failed("Unknown expression.");
         break;
     }
 }
 
-static void compiler_compile_lambda_expression(const SExpr *sexpr)
+static void compiler_compile_lambda_expression(const Value sexpr)
 {
-    SExpr *def;
+    Value def;
     Environment env;
 
     compiler_init_environment(&env, TYPE_FUNCTION);
 
     compiler_begin_scope();
 
-    for (SExpr *formal = PARSER_CDAR(sexpr); !PARSER_IS_NULL(formal); formal = PARSER_CDR(formal))
+    for (Value formal = OBJECT_CDAR(sexpr); !VALUE_IS_NULL(formal); formal = OBJECT_CDR(formal))
     {
         current->function->arity++;
         if (current->function->arity > 255)
         {
-            compiler_failed_at(&PARSER_AS_ATOM(PARSER_CAR(formal)),
-                               "Can't have more than 255 parameters.");
+            compiler_failed("Can't have more than 255 parameters.");
         }
-        int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CAR(formal)));
+        int var = compiler_declare_variable(OBJECT_CAR(formal));
         compiler_define_variable(var);
     }
 
-    for (def = PARSER_CDDR(sexpr); compiler_is_definition(PARSER_CAR(def)); def = PARSER_CDR(def))
+    for (def = OBJECT_CDDR(sexpr); compiler_is_definition(OBJECT_CAR(def)); def = OBJECT_CDR(def))
     {
-        compiler_compile_define(PARSER_CAR(def));
+        compiler_compile_define(OBJECT_CAR(def));
     }
 
-    for (SExpr *expr = def; !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
+    for (Value expr = def; !VALUE_IS_NULL(expr); expr = OBJECT_CDR(expr))
     {
-        if (!PARSER_IS_NULL(PARSER_CDR(expr)))
+        if (!VALUE_IS_NULL(OBJECT_CDR(expr)))
         {
-            compiler_compile_expression(PARSER_CAR(expr), false);
+            compiler_compile_expression(OBJECT_CAR(expr), false);
             compiler_emit_byte(OP_POP);
         }
         else
         {
-            compiler_compile_expression(PARSER_CAR(expr), true);
+            compiler_compile_expression(OBJECT_CAR(expr), true);
         }
     }
     // End the environment and emit implicit return
@@ -504,37 +494,37 @@ static void compiler_compile_lambda_expression(const SExpr *sexpr)
     }
 }
 
-static void compiler_compile_set_expression(const SExpr *sexpr)
+static void compiler_compile_set_expression(const Value sexpr)
 {
-    compiler_compile_expression(PARSER_CDDAR(sexpr), false);
-    compiler_compile_named_variable(PARSER_AS_ATOM(PARSER_CDAR(sexpr)), true);
+    compiler_compile_expression(OBJECT_CDDAR(sexpr), false);
+    compiler_compile_named_variable(OBJECT_CDAR(sexpr), true);
 }
 
-static void compiler_compile_let_expression(const SExpr *sexpr, bool tail)
+static void compiler_compile_let_expression(const Value sexpr, bool tail)
 {
-    SExpr *def;
+    Value def;
 
     compiler_begin_scope();
 
     // Save index for return value
     int result = current->local_count;
 
-    for (SExpr *bind = PARSER_CDAR(sexpr); !PARSER_IS_NULL(bind); bind = PARSER_CDR(bind))
+    for (Value bind = OBJECT_CDAR(sexpr); !VALUE_IS_NULL(bind); bind = OBJECT_CDR(bind))
     {
-        int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CAAR(bind)));
-        compiler_compile_expression(PARSER_CADAR(bind), false);
+        int var = compiler_declare_variable(OBJECT_CAAR(bind));
+        compiler_compile_expression(OBJECT_CADAR(bind), false);
         compiler_define_variable(var);
     }
 
-    for (def = PARSER_CDDR(sexpr); compiler_is_definition(PARSER_CAR(def)); def = PARSER_CDR(def))
+    for (def = OBJECT_CDDR(sexpr); compiler_is_definition(OBJECT_CAR(def)); def = OBJECT_CDR(def))
     {
-        compiler_compile_define(PARSER_CAR(def));
+        compiler_compile_define(OBJECT_CAR(def));
     }
 
-    for (SExpr *expr = def; !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
+    for (Value expr = def; !VALUE_IS_NULL(expr); expr = OBJECT_CDR(expr))
     {
-        compiler_compile_expression(PARSER_CAR(expr), false);
-        if (!PARSER_IS_NULL(PARSER_CDR(expr)))
+        compiler_compile_expression(OBJECT_CAR(expr), false);
+        if (!VALUE_IS_NULL(OBJECT_CDR(expr)))
             compiler_emit_byte(OP_POP);
     }
 
@@ -544,29 +534,29 @@ static void compiler_compile_let_expression(const SExpr *sexpr, bool tail)
     compiler_end_scope();
 }
 
-static void compiler_compile_begin_expression(const SExpr *sexpr, bool tail)
+static void compiler_compile_begin_expression(const Value sexpr, bool tail)
 {
-    for (SExpr *expr = PARSER_CDR(sexpr); !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
+    for (Value expr = OBJECT_CDR(sexpr); !VALUE_IS_NULL(expr); expr = OBJECT_CDR(expr))
     {
-        if (!PARSER_IS_NULL(PARSER_CDR(expr)))
+        if (!VALUE_IS_NULL(OBJECT_CDR(expr)))
         {
-            compiler_compile_expression(PARSER_CAR(expr), false);
+            compiler_compile_expression(OBJECT_CAR(expr), false);
             compiler_emit_byte(OP_POP);
         }
         else
         {
-            compiler_compile_expression(PARSER_CAR(expr), tail);
+            compiler_compile_expression(OBJECT_CAR(expr), tail);
         }
     }
 }
 
-static void compiler_compile_if_expression(const SExpr *sexpr)
+static void compiler_compile_if_expression(const Value sexpr)
 {
-    SExpr *cond_expr, *then_expr, *else_expr;
+    Value cond_expr, then_expr, else_expr;
 
-    cond_expr = PARSER_CDAR(sexpr);
-    then_expr = PARSER_CDDAR(sexpr);
-    else_expr = PARSER_CDDDAR(sexpr);
+    cond_expr = OBJECT_CDAR(sexpr);
+    then_expr = OBJECT_CDDAR(sexpr);
+    else_expr = OBJECT_CDDDAR(sexpr);
 
     compiler_compile_expression(cond_expr, false);
 
@@ -584,9 +574,9 @@ static void compiler_compile_if_expression(const SExpr *sexpr)
     compiler_patch_jump(else_jump);
 }
 
-static void compiler_compile_call_cc_expression(const SExpr *sexpr)
+static void compiler_compile_call_cc_expression(const Value sexpr)
 {
-    SExpr *expr = PARSER_CDAR(sexpr);
+    Value expr = OBJECT_CDAR(sexpr);
     uint8_t arg_count = 1;
 
     // Push the argument function first
@@ -599,16 +589,16 @@ static void compiler_compile_call_cc_expression(const SExpr *sexpr)
     compiler_emit_bytes(OP_CALL, arg_count);
 }
 
-static void compiler_compile_application_expression(const SExpr *sexpr, bool tail)
+static void compiler_compile_application_expression(const Value sexpr, bool tail)
 {
-    const SExpr *expr = sexpr;
+    Value expr = sexpr;
     uint8_t arg_count = 0;
 
-    compiler_compile_expression(PARSER_CAR(expr), false);
+    compiler_compile_expression(OBJECT_CAR(expr), false);
 
-    for (expr = PARSER_CDR(expr); !PARSER_IS_NULL(expr); expr = PARSER_CDR(expr))
+    for (expr = OBJECT_CDR(expr); !VALUE_IS_NULL(expr); expr = OBJECT_CDR(expr))
     {
-        compiler_compile_expression(PARSER_CAR(expr), false);
+        compiler_compile_expression(OBJECT_CAR(expr), false);
 
         if (arg_count >= 255)
             compiler_failed("Can't have more than 255 arguments.");
@@ -618,37 +608,38 @@ static void compiler_compile_application_expression(const SExpr *sexpr, bool tai
     compiler_emit_bytes((tail ? OP_TAIL_CALL : OP_CALL), arg_count);
 }
 
-static void compiler_compile_compound_expression(const SExpr *sexpr, bool tail)
+static void compiler_compile_compound_expression(const Value sexpr, bool tail)
 {
-    switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
+    if (OBJECT_IS_SYMBOL(OBJECT_CAR(sexpr)))
     {
-    case TOKEN_LAMBDA:
-        compiler_compile_lambda_expression(sexpr);
-        break;
-    case TOKEN_SET:
-        compiler_compile_set_expression(sexpr);
-        break;
-    case TOKEN_LET:
-        compiler_compile_let_expression(sexpr, tail);
-        break;
-    case TOKEN_BEGIN:
-        compiler_compile_begin_expression(sexpr, tail);
-        break;
-    case TOKEN_IF:
-        compiler_compile_if_expression(sexpr);
-        break;
-    case TOKEN_CALL_CC:
-        compiler_compile_call_cc_expression(sexpr);
-        break;
-    default:
-        compiler_compile_application_expression(sexpr, tail);
-        break;
+        switch (OBJECT_AS_SYMBOL(OBJECT_CAR(sexpr))->token)
+        {
+        case TOKEN_LAMBDA:
+            compiler_compile_lambda_expression(sexpr);
+            return;
+        case TOKEN_SET:
+            compiler_compile_set_expression(sexpr);
+            return;
+        case TOKEN_LET:
+            compiler_compile_let_expression(sexpr, tail);
+            return;
+        case TOKEN_BEGIN:
+            compiler_compile_begin_expression(sexpr, tail);
+            return;
+        case TOKEN_IF:
+            compiler_compile_if_expression(sexpr);
+            return;
+        case TOKEN_CALL_CC:
+            compiler_compile_call_cc_expression(sexpr);
+            return;
+        }
     }
+    compiler_compile_application_expression(sexpr, tail);
 }
 
-static void compiler_compile_expression(const SExpr *sexpr, bool tail)
+static void compiler_compile_expression(const Value sexpr, bool tail)
 {
-    if (PARSER_IS_CONS(sexpr))
+    if (OBJECT_IS_CONS(sexpr))
     {
         compiler_compile_compound_expression(sexpr, tail);
     }
@@ -669,16 +660,16 @@ static void compiler_define_variable(const int global)
     compiler_emit_short((uint16_t)global);
 }
 
-static void compiler_compile_define(const SExpr *sexpr)
+static void compiler_compile_define(const Value sexpr)
 {
-    int var = compiler_declare_variable(PARSER_AS_ATOM(PARSER_CDAR(sexpr)));
-    compiler_compile_expression(PARSER_CDDAR(sexpr), false);
+    int var = compiler_declare_variable(OBJECT_CDAR(sexpr));
+    compiler_compile_expression(OBJECT_CDDAR(sexpr), false);
     compiler_define_variable(var);
 }
 
-static void compiler_compile_definition(const SExpr *sexpr)
+static void compiler_compile_definition(const Value sexpr)
 {
-    switch (PARSER_AS_ATOM(PARSER_CAR(sexpr)).type)
+    switch (OBJECT_AS_SYMBOL(OBJECT_CAR(sexpr))->token)
     {
     case TOKEN_DEFINE:
         compiler_compile_define(sexpr);
@@ -686,7 +677,7 @@ static void compiler_compile_definition(const SExpr *sexpr)
     }
 }
 
-static void compiler_compile_form(const SExpr *sexpr)
+static void compiler_compile_form(const Value sexpr)
 {
     if (compiler_is_definition(sexpr))
     {
@@ -700,25 +691,25 @@ static void compiler_compile_form(const SExpr *sexpr)
 
 ObjFunction *compiler_compile(const char *source)
 {
-    SExpr *sexpr;
     Environment env;
     parser_init_parser(source);
-    compiler_init_environment(&env, TYPE_SCRIPT);
 
     compiler.failed = false;
 
-    ParseResult result = parser_parse(&sexpr);
+    Value sexpr = parser_parse();
 
-    if (result == PARSER_OK)
+    if (!VALUE_IS_VOID(sexpr))
     {
+        compiler_init_environment(&env, TYPE_SCRIPT);
+
 #ifdef DEBUG_PRINT_CODE
         printf("\ns-expr: ");
-        debug_disassemble_sexpression(sexpr);
+        value_print_value(sexpr);
         printf("\n\n");
 #endif
+
         compiler_compile_form(sexpr);
         ObjFunction *function = compiler_end_environment();
-        // parser_free_sexpr();
 
         if (!compiler.failed)
         {
