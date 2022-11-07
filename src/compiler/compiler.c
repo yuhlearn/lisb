@@ -692,7 +692,6 @@ static void compiler_compile_form(const Value sexpr)
 ObjFunction *compiler_compile(const char *source)
 {
     Environment env;
-    parser_init_parser(source);
 
     compiler.failed = false;
 

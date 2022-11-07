@@ -113,17 +113,10 @@ static void scanner_skip_whitespace()
             scanner.line_begin = scanner.current;
             scanner_advance();
             break;
-        case '/':
-            if (scanner_peek_next() == ';')
-            {
-                // A comment goes until the end of the line.
-                while (scanner_peek() != '\n' && !scanner_is_at_end())
-                    scanner_advance();
-            }
-            else
-            {
-                return;
-            }
+        case ';':
+            // A comment goes until the end of the line.
+            while (scanner_peek() != '\n' && !scanner_is_at_end())
+                scanner_advance();
             break;
         default:
             return;

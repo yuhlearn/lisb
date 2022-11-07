@@ -440,15 +440,26 @@ static InterpretResult vm_run()
 
 InterpretResult vm_interpret(const char *source)
 {
-    ObjFunction *function = compiler_compile(source);
-    if (function == NULL)
-        return VM_COMPILE_ERROR;
+    parser_init_parser(source);
 
-    vm_push(VALUE_OBJ_VAL(function));
-    ObjClosure *closure = object_new_closure(function);
-    vm_pop();
-    vm_push(VALUE_OBJ_VAL(closure));
-    vm_call(closure, 0);
+    do
+    {
+        ObjFunction *function = compiler_compile(source);
 
-    return vm_run();
+        if (function == NULL)
+        {
+            if (PARSER_IS_EOF(parser_get_error_token()))
+                return VM_OK;
+            return VM_COMPILE_ERROR;
+        }
+
+        vm_push(VALUE_OBJ_VAL(function));
+        ObjClosure *closure = object_new_closure(function);
+        vm_pop();
+        vm_push(VALUE_OBJ_VAL(closure));
+        vm_call(closure, 0);
+
+        if (vm_run() == VM_RUNTIME_ERROR)
+            return VM_RUNTIME_ERROR;
+    } while (true);
 }

@@ -96,7 +96,7 @@ static void memory_mark_array(ValueArray *array)
 
 static void memory_mark_list(ObjCons *cons)
 {
-    memory_mark_object(cons);
+    memory_mark_object((Obj *)cons);
     Value car = cons->car;
     Value cdr = cons->cdr;
 

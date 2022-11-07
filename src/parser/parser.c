@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct
 {
@@ -112,7 +113,11 @@ static void parser_free_objects()
     while (current != NULL)
     {
         Obj *next = current->next;
+
+        if (current->type == OBJ_SYMBOL)
+            free(((ObjSymbol *)current)->chars);
         free(current);
+
         current = next;
     }
 }
@@ -136,7 +141,7 @@ static Value parser_make_string(Token token)
     ObjString *string =
         (ObjString *)parser_allocate_object(sizeof(struct ObjString), OBJ_STRING);
 
-    string->chars = token.start + 1;
+    string->chars = (char *)token.start + 1;
     string->length = token.length = token.length - 2;
 
     parser_advance();
@@ -149,7 +154,10 @@ static Value parser_make_symbol(Token token)
     ObjSymbol *symbol =
         (ObjSymbol *)parser_allocate_object(sizeof(ObjSymbol), OBJ_SYMBOL);
 
-    symbol->chars = token.start;
+    symbol->chars = MEMORY_ALLOCATE(char, token.length + 1);
+    memcpy(symbol->chars, token.start, token.length);
+    symbol->chars[token.length] = '\0';
+
     symbol->length = token.length;
     symbol->token = token.type;
     symbol->line = token.line;
@@ -721,13 +729,13 @@ static Value parser_parse_form()
 
 void parser_reset_parser()
 {
-    Token token = {
+    Token eof = {
         .type = TOKEN_EOF,
         .start = NULL,
         .length = 0,
         .line = 0,
     };
-    parser.error_token = token;
+    parser.error_token = eof;
     parser_free_objects();
     parser.objects = NULL;
 }
