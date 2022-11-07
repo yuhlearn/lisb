@@ -73,13 +73,7 @@ void memory_mark_object(Obj *object)
 
     memory.gray_stack[memory.gray_count++] = object;
 
-    if (object->type == OBJ_CONS)
-    {
-        ObjCons *cons = (ObjCons *)object;
-        memory_mark_value(cons->car);
-        memory_mark_value(cons->cdr);
-    }
-    else if (object->type == OBJ_CONTINUATION)
+    if (object->type == OBJ_CONTINUATION)
     {
         ObjContinuation *cont = (ObjContinuation *)object;
         object_mark_continuation(cont);
@@ -98,6 +92,23 @@ static void memory_mark_array(ValueArray *array)
     {
         memory_mark_value(array->values[i]);
     }
+}
+
+static void memory_mark_list(ObjCons *cons)
+{
+    memory_mark_object(cons);
+    Value car = cons->car;
+    Value cdr = cons->cdr;
+
+    if (OBJECT_IS_CONS(car))
+        memory_mark_list(OBJECT_AS_CONS(car));
+    else
+        memory_mark_value(car);
+
+    if (OBJECT_IS_CONS(cdr))
+        memory_mark_list(OBJECT_AS_CONS(cdr));
+    else
+        memory_mark_value(cdr);
 }
 
 static void memory_blacken_object(Obj *object)
@@ -135,6 +146,9 @@ static void memory_blacken_object(Obj *object)
     case OBJ_UPVALUE:
         memory_mark_value(((ObjUpvalue *)object)->closed);
         break;
+    case OBJ_CONS:
+        memory_mark_list((ObjCons *)object);
+        break;
     case OBJ_PRIMITIVE:
     case OBJ_STRING:
         break;
@@ -146,7 +160,7 @@ static void memory_free_object(Obj *object)
 #ifdef DEBUG_LOG_GC
     printf("%p free type %d\n", (void *)object, object->type);
 
-    // printf("%p free ", (void *)object);
+    printf("%p free ", (void *)object);
     // value_print_value(VALUE_OBJ_VAL(object));
     // printf("\n");
 #endif
@@ -183,6 +197,9 @@ static void memory_free_object(Obj *object)
         MEMORY_FREE(ObjString, object);
         break;
     }
+    case OBJ_CONS:
+        MEMORY_FREE(ObjCons, object);
+        break;
     case OBJ_UPVALUE:
         MEMORY_FREE(ObjUpvalue, object);
         break;
